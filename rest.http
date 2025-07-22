@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:9999
+
+GET {{baseUrl}}/
+###
+GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-21T23:59:59Z
