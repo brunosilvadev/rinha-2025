@@ -3,3 +3,11 @@
 GET {{baseUrl}}/
 ###
 GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-21T23:59:59Z
+###
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "4a7901b8-7d26-4d9d-aa19-4dc1c7cf60b3",
+    "amount": 19.90
+}
