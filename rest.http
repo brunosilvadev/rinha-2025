@@ -1,16 +1,173 @@
 @baseUrl = http://localhost:9999
 
+# ===========================================
+# 1. VERIFICAÇÃO DE SAÚDE - Verificar se a API está em execução
+# ===========================================
 GET {{baseUrl}}/
+
 ###
-GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-21T23:59:59Z
+
+# ===========================================
+# 1.1. TESTE DO HEALTH CHECK SERVICE - Verificar processadores de pagamento
+# ===========================================
+GET {{baseUrl}}/test/health-check
+
 ###
+
+# ===========================================
+# 2. RESUMO INICIAL - Verificar estado inicial
+# ===========================================
+GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+
+###
+
+# ===========================================
+# 3. RESETAR REDIS - Começar com estado limpo
+# ===========================================
+DELETE {{baseUrl}}/payments-summary
+
+###
+
+# ===========================================
+# 4. PROCESSAR PAGAMENTOS - Testar processador padrão
+# ===========================================
+
+# Pagamento 1 - Valor pequeno
 POST {{baseUrl}}/payments
 Content-Type: application/json
 
 {
-    "correlationId": "4a7901b8-7d26-4d9d-aa19-4dc1c7cf60b3",
+    "correlationId": "550e8400-e29b-41d4-a716-446655440001",
     "amount": 19.90
 }
+
 ###
-# Reset summary (for testing)
+
+# Pagamento 2 - Valor médio
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440002",
+    "amount": 125.75
+}
+
+###
+
+# Pagamento 3 - Valor grande
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440003",
+    "amount": 999.99
+}
+
+###
+
+# Pagamento 4 - Teste de precisão decimal
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440004",
+    "amount": 0.01
+}
+
+###
+
+# Pagamento 5 - Outro pagamento de teste
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440005",
+    "amount": 49.99
+}
+
+###
+
+# ===========================================
+# 5. VERIFICAR RESUMO APÓS PAGAMENTOS
+# ===========================================
+GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+
+###
+
+# ===========================================
+# 6. TESTES DE TRATAMENTO DE ERROS
+# ===========================================
+
+# Testar ID de correlação inválido (GUID vazio)
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "00000000-0000-0000-0000-000000000000",
+    "amount": 50.00
+}
+
+###
+
+# Testar valor negativo
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440006",
+    "amount": -10.00
+}
+
+###
+
+# Testar valor zero
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "550e8400-e29b-41d4-a716-446655440007",
+    "amount": 0.00
+}
+
+###
+
+# Testar ausência de ID de correlação
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "amount": 25.00
+}
+
+###
+
+# ===========================================
+# 7. TESTES DE VALIDAÇÃO DE RESUMO
+# ===========================================
+
+# Testar ausência de parâmetros de data
+GET {{baseUrl}}/payments-summary
+
+###
+
+# Testar formato de data inválido
+GET {{baseUrl}}/payments-summary?from=invalid-date&to=2025-07-31T23:59:59Z
+
+###
+
+# Testar intervalo de datas invertido
+GET {{baseUrl}}/payments-summary?from=2025-07-31T23:59:59Z&to=2025-07-01T00:00:00Z
+
+###
+
+# ===========================================
+# 9. VERIFICAÇÃO FINAL DE RESUMO
+# ===========================================
+GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+
+###
+
+# ===========================================
+# 11. LIMPEZA - Resetar para próxima execução de teste
+# ===========================================
 DELETE {{baseUrl}}/payments-summary

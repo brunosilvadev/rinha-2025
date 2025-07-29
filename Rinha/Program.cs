@@ -22,7 +22,13 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
 // Register services
 builder.Services.AddHttpClient<PaymentService>();
 builder.Services.AddSingleton<PaymentSummaryService>();
-builder.Services.AddSingleton<PaymentService>(provider =>
+builder.Services.AddSingleton(provider =>
+{
+    var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+    var logger = provider.GetRequiredService<ILogger<PaymentHealthCheckService>>();
+    return new PaymentHealthCheckService(httpClientFactory, logger, defaultProcessorUrl, fallbackProcessorUrl);
+});
+builder.Services.AddSingleton(provider =>
 {
     var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
     var logger = provider.GetRequiredService<ILogger<PaymentService>>();

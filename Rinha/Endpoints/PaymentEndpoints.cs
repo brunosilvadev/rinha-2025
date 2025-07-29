@@ -60,5 +60,26 @@ public static class PaymentEndpoints
             await summaryService.ResetSummaryAsync();
             return Results.Ok(new { message = "Payment summary reset successfully" });
         });
+
+        // Test endpoint for health check service
+        app.MapGet("/test/health-check", async (PaymentHealthCheckService healthCheckService) =>
+        {
+            var defaultHealth = await healthCheckService.GetDefaultProcessorHealthAsync();
+            var fallbackHealth = await healthCheckService.GetFallbackProcessorHealthAsync();
+
+            return Results.Ok(new
+            {
+                @default = defaultHealth != null ? new
+                {
+                    failing = defaultHealth.Failing,
+                    minResponseTime = defaultHealth.MinResponseTime
+                } : null,
+                fallback = fallbackHealth != null ? new
+                {
+                    failing = fallbackHealth.Failing,
+                    minResponseTime = fallbackHealth.MinResponseTime
+                } : null
+            });
+        });
     }
 }
