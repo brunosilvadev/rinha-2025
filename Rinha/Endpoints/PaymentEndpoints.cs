@@ -31,7 +31,7 @@ public static class PaymentEndpoints
             }
         });
 
-        app.MapGet("/payments-summary", (string? from, string? to) =>
+        app.MapGet("/payments-summary", async (string? from, string? to, PaymentSummaryService summaryService) =>
         {
             // Validate query parameters
             if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to))
@@ -49,22 +49,16 @@ public static class PaymentEndpoints
                 return Results.BadRequest("'from' date cannot be greater than 'to' date.");
             }
 
-            // TODO: Replace with actual data retrieval logic
-            var summary = new SummaryResponse
-            {
-                Default = new PaymentProcessorSummary
-                {
-                    TotalRequests = 150,
-                    TotalAmount = 15000.50m
-                },
-                Fallback = new PaymentProcessorSummary
-                {
-                    TotalRequests = 25,
-                    TotalAmount = 2500.75m
-                }
-            };
-
+            // Get actual data from Redis
+            var summary = await summaryService.GetSummaryAsync(fromDate, toDate);
             return Results.Ok(summary);
+        });
+
+        // Optional: Reset endpoint for testing
+        app.MapDelete("/payments-summary", async (PaymentSummaryService summaryService) =>
+        {
+            await summaryService.ResetSummaryAsync();
+            return Results.Ok(new { message = "Payment summary reset successfully" });
         });
     }
 }

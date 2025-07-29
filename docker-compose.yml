@@ -7,6 +7,7 @@ services:
       - ASPNETCORE_URLS=http://*:8080
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
+      - REDIS_CONNECTION_STRING=redis:6379
     expose:
       - "8080"
     networks:
@@ -26,6 +27,7 @@ services:
       - ASPNETCORE_URLS=http://*:8080
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
+      - REDIS_CONNECTION_STRING=redis:6379
     expose:
       - "8080"
     networks:
@@ -54,6 +56,16 @@ services:
         limits:
           cpus: '0.10'
           memory: 32M
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
 
 networks:
   backend:

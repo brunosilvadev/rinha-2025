@@ -8,6 +8,7 @@ public class PaymentService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PaymentService> _logger;
+    private readonly PaymentSummaryService _summaryService;
     private readonly string _defaultProcessorUrl;
     private readonly string _fallbackProcessorUrl;
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -15,11 +16,12 @@ public class PaymentService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger, 
-        string defaultProcessorUrl, string fallbackProcessorUrl)
+    public PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger,
+        PaymentSummaryService summaryService, string defaultProcessorUrl, string fallbackProcessorUrl)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _summaryService = summaryService;
         _defaultProcessorUrl = defaultProcessorUrl;
         _fallbackProcessorUrl = fallbackProcessorUrl;
     }
@@ -33,14 +35,15 @@ public class PaymentService
             requestedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
         };
 
+        //TODO: improve logic to choose which processor to use
         // Try default processor first
-        if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default"))
+        if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default", paymentRequest.Amount))
         {
             return true;
         }
 
         // If default fails, try fallback processor
-        if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback"))
+        if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback", paymentRequest.Amount))
         {
             return true;
         }
@@ -50,7 +53,7 @@ public class PaymentService
         return false;
     }
 
-    private async Task<bool> TryProcessPayment(string processorUrl, object paymentData, string processorType)
+    private async Task<bool> TryProcessPayment(string processorUrl, object paymentData, string processorType, decimal amount)
     {
         try
         {
@@ -64,6 +67,9 @@ public class PaymentService
 
             if (response.IsSuccessStatusCode)
             {
+                // Track successful payment in Redis
+                await _summaryService.IncrementPaymentAsync(processorType, amount);
+
                 _logger.LogInformation("Payment processed successfully via {ProcessorType} processor for correlation ID: {CorrelationId}",
                     processorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
                 return true;
