@@ -3,40 +3,29 @@ using Rinha.Models;
 
 namespace Rinha.Services;
 
-public class PaymentSummaryService
+public class PaymentSummaryService(IConnectionMultiplexer redis, ILogger<PaymentSummaryService> logger)
 {
-    private readonly IDatabase _database;
-    private readonly ILogger<PaymentSummaryService> _logger;
+    private readonly IDatabase _database = redis.GetDatabase();
+    private readonly ILogger<PaymentSummaryService> _logger = logger;
 
-    private const string DefaultRequestsKey = "payment_summary:default:requests";
-    private const string DefaultAmountKey = "payment_summary:default:amount";
-    private const string FallbackRequestsKey = "payment_summary:fallback:requests";
-    private const string FallbackAmountKey = "payment_summary:fallback:amount";
-
-    public PaymentSummaryService(IConnectionMultiplexer redis, ILogger<PaymentSummaryService> logger)
-    {
-        _database = redis.GetDatabase();
-        _logger = logger;
-    }
+    private const string DefaultPaymentsKey = "payment_summary:default:payments";
+    private const string FallbackPaymentsKey = "payment_summary:fallback:payments";
 
     public async Task IncrementPaymentAsync(string processorType, decimal amount)
     {
         try
         {
-            var requestsKey = processorType.ToLower() == "default" ? DefaultRequestsKey : FallbackRequestsKey;
-            var amountKey = processorType.ToLower() == "default" ? DefaultAmountKey : FallbackAmountKey;
+            var paymentsKey = processorType.ToLower() == "default" ? DefaultPaymentsKey : FallbackPaymentsKey;
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            // Use pipeline for atomic operations
-            var batch = _database.CreateBatch();
-            var incrementRequests = batch.StringIncrementAsync(requestsKey);
-            var incrementAmount = batch.StringIncrementAsync(amountKey, (double)amount);
+            // Store payment amount with timestamp as score in Redis sorted set
+            // The member value combines timestamp and amount for uniqueness
+            var memberValue = $"{timestamp}:{amount}";
             
-            batch.Execute();
+            await _database.SortedSetAddAsync(paymentsKey, memberValue, timestamp);
 
-            await Task.WhenAll(incrementRequests, incrementAmount);
-
-            _logger.LogDebug("Incremented {ProcessorType} payment: requests={Requests}, amount={Amount}",
-                processorType, await incrementRequests, await incrementAmount);
+            _logger.LogDebug("Added {ProcessorType} payment: amount={Amount}, timestamp={Timestamp}",
+                processorType, amount, timestamp);
         }
         catch (Exception ex)
         {
@@ -48,42 +37,46 @@ public class PaymentSummaryService
     {
         try
         {
-            // For this implementation, we're returning total counts regardless of date range
-            // In a real scenario, you might want to implement time-based keys or use Redis Streams
-            
-            var batch = _database.CreateBatch();
-            var defaultRequests = batch.StringGetAsync(DefaultRequestsKey);
-            var defaultAmount = batch.StringGetAsync(DefaultAmountKey);
-            var fallbackRequests = batch.StringGetAsync(FallbackRequestsKey);
-            var fallbackAmount = batch.StringGetAsync(FallbackAmountKey);
-            
-            batch.Execute();
+            var fromTimestamp = new DateTimeOffset(from).ToUnixTimeMilliseconds();
+            var toTimestamp = new DateTimeOffset(to).ToUnixTimeMilliseconds();
 
-            await Task.WhenAll(defaultRequests, defaultAmount, fallbackRequests, fallbackAmount);
+            // Get payments from both processors within the time range
+            var defaultPayments = await _database.SortedSetRangeByScoreAsync(
+                DefaultPaymentsKey, fromTimestamp, toTimestamp);
+            var fallbackPayments = await _database.SortedSetRangeByScoreAsync(
+                FallbackPaymentsKey, fromTimestamp, toTimestamp);
+
+            // Calculate totals for default processor
+            var defaultTotalRequests = defaultPayments.Length;
+            var defaultTotalAmount = CalculateTotalAmount(defaultPayments);
+
+            // Calculate totals for fallback processor
+            var fallbackTotalRequests = fallbackPayments.Length;
+            var fallbackTotalAmount = CalculateTotalAmount(fallbackPayments);
 
             var summary = new SummaryResponse
             {
                 Default = new PaymentProcessorSummary
                 {
-                    TotalRequests = (int)(defaultRequests.Result.HasValue ? (long)defaultRequests.Result : 0),
-                    TotalAmount = (decimal)(defaultAmount.Result.HasValue ? (double)defaultAmount.Result : 0)
+                    TotalRequests = defaultTotalRequests,
+                    TotalAmount = defaultTotalAmount
                 },
                 Fallback = new PaymentProcessorSummary
                 {
-                    TotalRequests = (int)(fallbackRequests.Result.HasValue ? (long)fallbackRequests.Result : 0),
-                    TotalAmount = (decimal)(fallbackAmount.Result.HasValue ? (double)fallbackAmount.Result : 0)
+                    TotalRequests = fallbackTotalRequests,
+                    TotalAmount = fallbackTotalAmount
                 }
             };
 
-            _logger.LogDebug("Retrieved payment summary: Default({DefaultRequests}, {DefaultAmount}), Fallback({FallbackRequests}, {FallbackAmount})",
-                summary.Default.TotalRequests, summary.Default.TotalAmount,
+            _logger.LogDebug("Retrieved payment summary for period {From} to {To}: Default({DefaultRequests}, {DefaultAmount}), Fallback({FallbackRequests}, {FallbackAmount})",
+                from, to, summary.Default.TotalRequests, summary.Default.TotalAmount,
                 summary.Fallback.TotalRequests, summary.Fallback.TotalAmount);
 
             return summary;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve payment summary");
+            _logger.LogError(ex, "Failed to retrieve payment summary for period {From} to {To}", from, to);
             
             // Return empty summary on error
             return new SummaryResponse
@@ -94,11 +87,26 @@ public class PaymentSummaryService
         }
     }
 
+    private static decimal CalculateTotalAmount(RedisValue[] payments)
+    {
+        decimal total = 0;
+        foreach (var payment in payments)
+        {
+            // Extract amount from the member value format "timestamp:amount"
+            var parts = payment.ToString().Split(':');
+            if (parts.Length >= 2 && decimal.TryParse(parts[1], out var amount))
+            {
+                total += amount;
+            }
+        }
+        return total;
+    }
+
     public async Task ResetSummaryAsync()
     {
         try
         {
-            var keys = new RedisKey[] { DefaultRequestsKey, DefaultAmountKey, FallbackRequestsKey, FallbackAmountKey };
+            var keys = new RedisKey[] { DefaultPaymentsKey, FallbackPaymentsKey };
             await _database.KeyDeleteAsync(keys);
             _logger.LogInformation("Payment summary reset successfully");
         }

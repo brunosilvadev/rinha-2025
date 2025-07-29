@@ -4,27 +4,18 @@ using Rinha.Models;
 
 namespace Rinha.Services;
 
-public class PaymentService
+public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger,
+    PaymentSummaryService summaryService, string defaultProcessorUrl, string fallbackProcessorUrl)
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<PaymentService> _logger;
-    private readonly PaymentSummaryService _summaryService;
-    private readonly string _defaultProcessorUrl;
-    private readonly string _fallbackProcessorUrl;
-    private readonly JsonSerializerOptions _jsonOptions = new()
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly ILogger<PaymentService> _logger = logger;
+    private readonly PaymentSummaryService _summaryService = summaryService;
+    private readonly string _defaultProcessorUrl = defaultProcessorUrl;
+    private readonly string _fallbackProcessorUrl = fallbackProcessorUrl;
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
-
-    public PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger,
-        PaymentSummaryService summaryService, string defaultProcessorUrl, string fallbackProcessorUrl)
-    {
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-        _summaryService = summaryService;
-        _defaultProcessorUrl = defaultProcessorUrl;
-        _fallbackProcessorUrl = fallbackProcessorUrl;
-    }
 
     public async Task<bool> ProcessPaymentAsync(PaymentRequest paymentRequest)
     {
@@ -60,7 +51,7 @@ public class PaymentService
             using var httpClient = _httpClientFactory.CreateClient();
             httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-            var json = JsonSerializer.Serialize(paymentData, _jsonOptions);
+            var json = JsonSerializer.Serialize(paymentData, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await httpClient.PostAsync($"{processorUrl}/payments", content);

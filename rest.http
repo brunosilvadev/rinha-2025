@@ -161,7 +161,72 @@ GET {{baseUrl}}/payments-summary?from=2025-07-31T23:59:59Z&to=2025-07-01T00:00:0
 ###
 
 # ===========================================
-# 9. VERIFICAÇÃO FINAL DE RESUMO
+# 8. TESTES DE FUNCIONALIDADE DE INTERVALO DE DATAS (Novo GetSummaryAsync Refatorado)
+# ===========================================
+
+# Teste 1: Obter resumo apenas da hora atual
+GET {{baseUrl}}/payments-summary?from={{$datetime iso8601 -1 h}}&to={{$datetime iso8601}}
+
+###
+
+# Teste 2: Obter resumo das últimas 24 horas
+GET {{baseUrl}}/payments-summary?from={{$datetime iso8601 -1 d}}&to={{$datetime iso8601}}
+
+###
+
+# Teste 3: Obter resumo de um dia específico (hoje)
+GET {{baseUrl}}/payments-summary?from={{$datetime iso8601 -0 d "yyyy-MM-ddT00:00:00Z"}}&to={{$datetime iso8601 -0 d "yyyy-MM-ddT23:59:59Z"}}
+
+###
+
+# Teste 4: Obter resumo para intervalo de tempo muito curto (últimos 10 minutos)
+GET {{baseUrl}}/payments-summary?from={{$datetime iso8601 -10 m}}&to={{$datetime iso8601}}
+
+###
+
+# Teste 5: Obter resumo para um intervalo amplo (este mês)
+GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+
+###
+
+# Teste 6: Obter resumo para intervalo futuro (deve retornar vazio)
+GET {{baseUrl}}/payments-summary?from=2025-12-01T00:00:00Z&to=2025-12-31T23:59:59Z
+
+###
+
+# ===========================================
+# 9. TESTES DE VERIFICAÇÃO PARA FILTRO POR TEMPO
+# ===========================================
+
+# Faça alguns pagamentos primeiro, depois teste diferentes intervalos de tempo
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+    "correlationId": "time-test-001",
+    "amount": 100.00
+}
+
+###
+
+# Aguarde um momento e faça outro pagamento (pode executar manualmente)
+# POST {{baseUrl}}/payments
+# Content-Type: application/json
+# 
+# {
+#     "correlationId": "time-test-002", 
+#     "amount": 200.00
+# }
+
+###
+
+# Teste: Obter resumo de 1 minuto atrás até agora (deve incluir pagamentos recentes)
+GET {{baseUrl}}/payments-summary?from={{$datetime iso8601 -1 m}}&to={{$datetime iso8601}}
+
+
+###
+# ===========================================
+# 10. VERIFICAÇÃO FINAL DE RESUMO
 # ===========================================
 GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
 

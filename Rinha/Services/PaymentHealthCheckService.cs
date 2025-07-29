@@ -3,27 +3,19 @@ using Rinha.Models;
 
 namespace Rinha.Services;
 
-public class PaymentHealthCheckService
+public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
+                               ILogger<PaymentHealthCheckService> logger,
+                               string defaultProcessorUrl,
+                               string fallbackProcessorUrl)
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<PaymentHealthCheckService> _logger;
-    private readonly string _defaultProcessorUrl;
-    private readonly string _fallbackProcessorUrl;
-    private readonly JsonSerializerOptions _jsonOptions = new()
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly ILogger<PaymentHealthCheckService> _logger = logger;
+    private readonly string _defaultProcessorUrl = defaultProcessorUrl;
+    private readonly string _fallbackProcessorUrl = fallbackProcessorUrl;
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
-
-    public PaymentHealthCheckService(IHttpClientFactory httpClientFactory, 
-                                   ILogger<PaymentHealthCheckService> logger,
-                                   string defaultProcessorUrl, 
-                                   string fallbackProcessorUrl)
-    {
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-        _defaultProcessorUrl = defaultProcessorUrl;
-        _fallbackProcessorUrl = fallbackProcessorUrl;
-    }
 
     /// <summary>
     /// Gets the health check status for the default payment processor.
@@ -55,7 +47,7 @@ public class PaymentHealthCheckService
             if (response.IsSuccessStatusCode)
             {
                 var jsonContent = await response.Content.ReadAsStringAsync();
-                var healthCheck = JsonSerializer.Deserialize<PaymentProcessorHealthCheck>(jsonContent, _jsonOptions);
+                var healthCheck = JsonSerializer.Deserialize<PaymentProcessorHealthCheck>(jsonContent, JsonOptions);
 
                 _logger.LogDebug("{ProcessorType} processor health check successful: Failing={Failing}, MinResponseTime={MinResponseTime}ms",
                     processorType, healthCheck?.Failing, healthCheck?.MinResponseTime);
