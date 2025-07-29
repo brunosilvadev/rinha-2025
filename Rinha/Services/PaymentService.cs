@@ -5,11 +5,12 @@ using Rinha.Models;
 namespace Rinha.Services;
 
 public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger,
-    PaymentSummaryService summaryService, string defaultProcessorUrl, string fallbackProcessorUrl)
+    PaymentSummaryService summaryService, DecisionService decisionService, string defaultProcessorUrl, string fallbackProcessorUrl)
 {
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ILogger<PaymentService> _logger = logger;
     private readonly PaymentSummaryService _summaryService = summaryService;
+    private readonly DecisionService _decisionService = decisionService;
     private readonly string _defaultProcessorUrl = defaultProcessorUrl;
     private readonly string _fallbackProcessorUrl = fallbackProcessorUrl;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -27,16 +28,24 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         };
 
         //TODO: improve logic to choose which processor to use
-        // Try default processor first
-        if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default", paymentRequest.Amount))
+        // Use DecisionService to determine which processor to use
+        bool useDefaultProcessor = await _decisionService.DecidePaymentProcessor();
+        
+        if (useDefaultProcessor)
         {
-            return true;
+            // Use default processor only
+            if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default", paymentRequest.Amount))
+            {
+                return true;
+            }
         }
-
-        // If default fails, try fallback processor
-        if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback", paymentRequest.Amount))
+        else
         {
-            return true;
+            // Use fallback processor only
+            if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback", paymentRequest.Amount))
+            {
+                return true;
+            }
         }
 
         _logger.LogError("Both payment processors failed for correlation ID: {CorrelationId}", 
