@@ -34,32 +34,31 @@ public class Program
             config.RequestCount, config.ThreadCount);
         _logger.LogInformation("Target URL: {BaseUrl}", config.BaseUrl);
 
-        // Log enabled features
-        if (config.EnableMidTestDelayChange && config.EnableMidTestFailureChange)
-        {
-            _logger.LogInformation("🔥 Both mid-test DELAY and FAILURE changes are ENABLED - Dynamic resilience testing active!");
-        }
-        else if (config.EnableMidTestDelayChange)
-        {
-            _logger.LogInformation("🔥 Mid-test DELAY change is ENABLED - Will set 1250ms delay mid-test, then reset to 0ms");
-        }
-        else if (config.EnableMidTestFailureChange)
-        {
-            _logger.LogInformation("💥 Mid-test FAILURE change is ENABLED - Will enable failures mid-test, then disable them");
-        }
-        else
-        {
-            _logger.LogInformation("ℹ️ Mid-test changes are DISABLED - Running standard stress test");
-        }
+        // Roll for stress conditions
+        var random = new Random();
+        var stressRoll = random.Next(1, 5); // 1d4 roll
         
-        if (config.EnableMidTestDelayChange)
+        var stressCondition = stressRoll switch
         {
-            _logger.LogInformation("🔥 Mid-test delay change is ENABLED - Will set 1250ms delay mid-test, then reset to 0ms");
-        }
-        else
+            1 => StressCondition.BothDelayAndFailure,
+            2 => StressCondition.FailureOnly,
+            3 => StressCondition.DelayOnly,
+            4 => StressCondition.None,
+            _ => StressCondition.None
+        };
+
+        _logger.LogInformation("🎲 Rolled {Roll}/4 for stress conditions", stressRoll);
+        
+        var stressMessage = stressCondition switch
         {
-            _logger.LogInformation("Mid-test delay change is disabled");
-        }
+            StressCondition.BothDelayAndFailure => "🔥💥 Both HIGH LATENCY and FAILURE conditions will be applied randomly during test!",
+            StressCondition.FailureOnly => "💥 FAILURE condition will be applied randomly during test!",
+            StressCondition.DelayOnly => "🔥 HIGH LATENCY condition will be applied randomly during test!",
+            StressCondition.None => "✅ No stress conditions will be applied - running clean test",
+            _ => "✅ No stress conditions will be applied - running clean test"
+        };
+        
+        _logger.LogInformation(stressMessage);
 
         // Handle different modes
         if (config.Mode == TestMode.SetDelay)
@@ -68,7 +67,7 @@ public class Program
             return;
         }
 
-        await RunStressTest(config);
+        await RunStressTest(config, stressCondition);
     }
 
     private static StressTestConfig? ParseArguments(string[] args)
@@ -114,12 +113,6 @@ public class Program
                     }
                     i++;
                     break;
-                case "--no-mid-test-delay":
-                    config.EnableMidTestDelayChange = false;
-                    break;
-                case "--no-mid-test-failure":
-                    config.EnableMidTestFailureChange = false;
-                    break;
                 case "-h" or "--help":
                     return null;
             }
@@ -140,18 +133,19 @@ public class Program
         Console.WriteLine("  -u, --url <url>          Base URL for the API (default: http://localhost:9999)");
         Console.WriteLine("  --set-delay <ms>         Set delay on processor in milliseconds");
         Console.WriteLine("  --processor <type>       Processor type: default or fallback (default: default)");
-        Console.WriteLine("  --no-mid-test-delay      Disable mid-test delay change (enabled by default)");
-        Console.WriteLine("  --no-mid-test-failure    Disable mid-test failure simulation (enabled by default)");
         Console.WriteLine("  -h, --help               Show this help message");
+        Console.WriteLine();
+        Console.WriteLine("Stress Conditions:");
+        Console.WriteLine("  The tool randomly applies stress conditions during the test:");
+        Console.WriteLine("  - 1/4 chance: Both high latency (1250ms) and failures");
+        Console.WriteLine("  - 1/4 chance: Failures only");
+        Console.WriteLine("  - 1/4 chance: High latency (1250ms) only");
+        Console.WriteLine("  - 1/4 chance: No stress conditions");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  RinhaStressTester -r 1000 -t 20");
         Console.WriteLine("  RinhaStressTester --requests 5000 --threads 50 --url http://localhost:8080");
-        Console.WriteLine("  RinhaStressTester -r 2000 -t 30 --no-mid-test-delay");
-        Console.WriteLine("  RinhaStressTester -r 1500 -t 25 --no-mid-test-failure");
-        Console.WriteLine("  RinhaStressTester -r 3000 -t 40 --no-mid-test-delay --no-mid-test-failure");
         Console.WriteLine("  RinhaStressTester --set-delay 1250 --processor default");
-        Console.WriteLine("  RinhaStressTester --set-delay 500 --processor fallback");
     }
 
     private static async Task SetProcessorDelay(StressTestConfig config)
@@ -194,30 +188,37 @@ public class Program
         }
     }
 
-    private static async Task RunStressTest(StressTestConfig config)
+    private static async Task RunStressTest(StressTestConfig config, StressCondition stressCondition)
     {
         var statistics = new StressTestStatistics();
         var semaphore = new SemaphoreSlim(config.ThreadCount);
         var tasks = new List<Task>();
         var stopwatch = Stopwatch.StartNew();
+        var random = new Random();
 
         // Generate test payment requests
         var paymentRequests = GeneratePaymentRequests(config.RequestCount);
 
         _logger.LogInformation("Generated {Count} payment requests", paymentRequests.Count);
 
-        // Start mid-test delay change task if enabled
-        Task? delayTask = null;
-        if (config.EnableMidTestDelayChange)
+        // Determine random stress application points
+        var stressApplicationPoints = new List<int>();
+        if (stressCondition != StressCondition.None)
         {
-            delayTask = StartMidTestDelayChange(config.RequestCount);
-        }
-
-        // Start mid-test failure change task if enabled
-        Task? failureTask = null;
-        if (config.EnableMidTestFailureChange)
-        {
-            failureTask = StartMidTestFailureChange(config.RequestCount);
+            // Apply stress at 1-3 random points during the test
+            var numStressPoints = random.Next(1, 4);
+            for (int i = 0; i < numStressPoints; i++)
+            {
+                // Pick random request indices between 10% and 90% of total requests
+                var minPoint = (int)(config.RequestCount * 0.1);
+                var maxPoint = (int)(config.RequestCount * 0.9);
+                var stressPoint = random.Next(minPoint, maxPoint);
+                stressApplicationPoints.Add(stressPoint);
+            }
+            stressApplicationPoints.Sort();
+            
+            _logger.LogInformation("🎯 Stress conditions will be applied at request indices: {Points}", 
+                string.Join(", ", stressApplicationPoints));
         }
 
         for (int i = 0; i < config.RequestCount; i++)
@@ -230,6 +231,12 @@ public class Program
                 await semaphore.WaitAsync();
                 try
                 {
+                    // Check if we should apply stress at this point
+                    if (stressApplicationPoints.Contains(requestIndex))
+                    {
+                        await ApplyStressCondition(stressCondition, requestIndex);
+                    }
+                    
                     await SendPaymentRequest(config.BaseUrl, paymentRequest, statistics, requestIndex);
                 }
                 finally
@@ -242,54 +249,57 @@ public class Program
         await Task.WhenAll(tasks);
         stopwatch.Stop();
 
-        // Wait for delay task to complete if it was started
-        if (delayTask != null)
+        // Reset any applied stress conditions
+        if (stressCondition != StressCondition.None)
         {
-            await delayTask;
-        }
-
-        // Wait for failure task to complete if it was started
-        if (failureTask != null)
-        {
-            await failureTask;
+            _logger.LogInformation("🔄 Resetting all stress conditions...");
+            await ResetStressConditions();
         }
 
         // Display results
         DisplayResults(statistics, stopwatch.Elapsed, config);
     }
 
-    private static async Task StartMidTestDelayChange(int totalRequests)
+    private static async Task ApplyStressCondition(StressCondition condition, int requestIndex)
     {
         try
         {
-            // Calculate when to trigger the delay change (middle of execution)
-            // We'll estimate based on request processing time, but also use a minimum delay
-            var estimatedTimePerRequest = 50; // Estimate 50ms per request on average
-            var estimatedTotalTime = totalRequests * estimatedTimePerRequest / 1000; // Convert to seconds
-            var delayTime = Math.Max(5, estimatedTotalTime / 2); // Wait at least 5 seconds or half the estimated time
-
-            _logger.LogInformation("Mid-test delay change will trigger in approximately {DelayTime} seconds", delayTime);
-            
-            // Wait for the middle of the test
-            await Task.Delay(TimeSpan.FromSeconds(delayTime));
-            
-            // Set delay to 1250ms on default processor
-            _logger.LogInformation("🔄 TRIGGERING MID-TEST DELAY CHANGE - Setting delay to 1250ms on default processor");
-            await SetProcessorDelayInternal("http://localhost:8001", 1250, "Default");
-            
-            // Wait for 3 seconds
-            _logger.LogInformation("⏳ Waiting 3 seconds with increased delay...");
-            await Task.Delay(TimeSpan.FromSeconds(3));
-            
-            // Reset delay back to 0
-            _logger.LogInformation("🔄 RESETTING DELAY - Setting delay back to 0ms on default processor");
-            await SetProcessorDelayInternal("http://localhost:8001", 0, "Default");
-            
-            _logger.LogInformation("✅ Mid-test delay change sequence completed");
+            switch (condition)
+            {
+                case StressCondition.BothDelayAndFailure:
+                    _logger.LogInformation("🔥💥 APPLYING STRESS at request {Index}: High latency + Failures", requestIndex);
+                    await SetProcessorDelayInternal("http://localhost:8001", 1250, "Default");
+                    await SetProcessorFailureInternal("http://localhost:8001", true, "Default");
+                    break;
+                    
+                case StressCondition.FailureOnly:
+                    _logger.LogInformation("💥 APPLYING STRESS at request {Index}: Failures only", requestIndex);
+                    await SetProcessorFailureInternal("http://localhost:8001", true, "Default");
+                    break;
+                    
+                case StressCondition.DelayOnly:
+                    _logger.LogInformation("� APPLYING STRESS at request {Index}: High latency only", requestIndex);
+                    await SetProcessorDelayInternal("http://localhost:8001", 1250, "Default");
+                    break;
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during mid-test delay change");
+            _logger.LogError(ex, "Error applying stress condition at request {Index}", requestIndex);
+        }
+    }
+
+    private static async Task ResetStressConditions()
+    {
+        try
+        {
+            await SetProcessorDelayInternal("http://localhost:8001", 0, "Default");
+            await SetProcessorFailureInternal("http://localhost:8001", false, "Default");
+            _logger.LogInformation("✅ All stress conditions reset");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting stress conditions");
         }
     }
 
@@ -321,40 +331,6 @@ public class Program
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting delay on {ProcessorName} processor", processorName);
-        }
-    }
-
-    private static async Task StartMidTestFailureChange(int totalRequests)
-    {
-        try
-        {
-            // Calculate when to trigger the failure change (middle of execution, but offset from delay change)
-            var estimatedTimePerRequest = 50; // Estimate 50ms per request on average
-            var estimatedTotalTime = totalRequests * estimatedTimePerRequest / 1000; // Convert to seconds
-            var delayTime = Math.Max(7, (estimatedTotalTime / 2) + 2); // Wait at least 7 seconds or half + 2 seconds (offset from delay change)
-
-            _logger.LogInformation("Mid-test failure change will trigger in approximately {DelayTime} seconds", delayTime);
-            
-            // Wait for the middle of the test (offset from delay change)
-            await Task.Delay(TimeSpan.FromSeconds(delayTime));
-            
-            // Enable failure on default processor
-            _logger.LogInformation("💥 TRIGGERING MID-TEST FAILURE CHANGE - Enabling failures on default processor");
-            await SetProcessorFailureInternal("http://localhost:8001", true, "Default");
-            
-            // Wait for 3 seconds
-            _logger.LogInformation("⏳ Waiting 3 seconds with failures enabled...");
-            await Task.Delay(TimeSpan.FromSeconds(3));
-            
-            // Disable failure back to normal
-            _logger.LogInformation("🔄 RESETTING FAILURE - Disabling failures on default processor");
-            await SetProcessorFailureInternal("http://localhost:8001", false, "Default");
-            
-            _logger.LogInformation("✅ Mid-test failure change sequence completed");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during mid-test failure change");
         }
     }
 
@@ -497,8 +473,6 @@ public class StressTestConfig
     public TestMode Mode { get; set; } = TestMode.StressTest;
     public ProcessorType ProcessorType { get; set; } = ProcessorType.Default;
     public int SetDelayMs { get; set; } = 0;
-    public bool EnableMidTestDelayChange { get; set; } = true; // Enable by default for dynamic testing
-    public bool EnableMidTestFailureChange { get; set; } = true; // Enable by default for dynamic testing
 }
 
 public enum TestMode
@@ -511,6 +485,14 @@ public enum ProcessorType
 {
     Default,
     Fallback
+}
+
+public enum StressCondition
+{
+    None,
+    DelayOnly,
+    FailureOnly,
+    BothDelayAndFailure
 }
 
 public class PaymentRequest
