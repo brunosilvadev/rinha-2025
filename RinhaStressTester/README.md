@@ -4,48 +4,41 @@ A comprehensive .NET 9 load testing tool for the Rinha de Backend 2025 challenge
 
 ## 🔥 New Features
 
-### Mid-Test Delay Change
-The stress tester includes a powerful feature that simulates real-world latency scenarios:
+### Random Stress Condition System
+The stress tester uses a **dice roll system** to randomly apply stress conditions during tests:
 
-- **Automatically triggers** during the middle of your stress test
-- **Sets delay to 1250ms** on the default processor (`http://localhost:8001`)
-- **Waits 3 seconds** with the increased delay
-- **Resets delay back to 0ms** to continue normal operation
-- **Enabled by default** for all stress tests (can be disabled with `--no-mid-test-delay`)
+- **1d4 Roll** determines which stress condition to apply
+- **25% chance each** for: Both delay+failure, Failure only, Delay only, or No stress
+- **Can be disabled** with `--no-stress` flag for guaranteed clean tests
+- **Applied at random points** during the test (between 10% and 90% completion)
 
-### Mid-Test Failure Simulation
-Additionally, the tool can simulate processor failures during execution:
+### Stress Conditions Applied
+When stress is triggered, it can include:
 
-- **Automatically triggers** during the middle of your stress test (offset from delay change)
-- **Enables failures** on the default processor (`http://localhost:8001`)
-- **Waits 3 seconds** with failures enabled
-- **Disables failures** back to normal operation
-- **Enabled by default** for all stress tests (can be disabled with `--no-mid-test-failure`)
+- **High Latency**: Sets 1250ms delay on default processor
+- **Failures**: Enables failures on default processor  
+- **Random Timing**: Applied at 1-3 random points during test execution
+- **Automatic Reset**: All conditions are reset after test completion
 
-These features help you test how your system handles sudden latency spikes AND processor failures during peak load!
+This simulates real-world unpredictable scenarios during peak load!
 
 ## Usage
 
 ### Basic Usage
 ```bash
-# Basic stress test with BOTH delay and failure changes (default behavior)
+# Basic stress test with random stress conditions (1d4 roll system)
 dotnet run -- -r 1000 -t 20
 
-# Stress test with ONLY delay changes
-dotnet run -- -r 1000 -t 20 --no-mid-test-failure
+# Clean test with NO stress conditions (guaranteed)
+dotnet run -- -r 1000 -t 20 --no-stress
 
-# Stress test with ONLY failure simulation  
-dotnet run -- -r 1000 -t 20 --no-mid-test-delay
+# Higher load test with random conditions
+dotnet run -- -r 5000 -t 50 --url http://localhost:9999
 
-# Stress test with NO mid-test changes
-dotnet run -- -r 1000 -t 20 --no-mid-test-delay --no-mid-test-failure
-
-# Custom URL with both mid-test changes
-dotnet run -- -r 5000 -t 50 --url http://localhost:8080
-
-# Manually set processor delay (utility mode)
+# Manually set processor delay (utility mode - no stress test)
 dotnet run -- --set-delay 1250 --processor default
 dotnet run -- --set-delay 500 --processor fallback
+dotnet run -- --set-delay 0 --processor default  # Reset delay
 ```
 
 ### Command Line Options
@@ -55,49 +48,47 @@ dotnet run -- --set-delay 500 --processor fallback
 | `--requests` | `-r` | Number of requests to send (required for stress test) | - |
 | `--threads` | `-t` | Number of concurrent threads | 10 |
 | `--url` | `-u` | Base URL for the API | http://localhost:9999 |
-| `--set-delay` | - | Set delay on processor in milliseconds | - |
+| `--set-delay` | - | Set delay on processor in milliseconds (utility mode) | - |
 | `--processor` | - | Processor type: default or fallback | default |
-| `--no-mid-test-delay` | - | Disable mid-test delay change | false |
-| `--no-mid-test-failure` | - | Disable mid-test failure simulation | false |
+| `--no-stress` | - | Disable random stress conditions (force clean test) | false |
 | `--help` | `-h` | Show help message | - |
+
+**Note**: By default, stress conditions are applied randomly via 1d4 dice roll. Use `--no-stress` to guarantee no stress conditions.
 
 ## Demo Scripts
 
-Four demo scripts are included:
+Since stress conditions are now random, demo scripts would show different stress patterns:
 
-1. **`demo-mid-test-delay.bat`** - Demonstrates BOTH delay and failure changes (full resilience test)
-2. **`demo-delay-only.bat`** - Shows only delay changes
-3. **`demo-failure-only.bat`** - Shows only failure simulation
-4. **`demo-normal-test.bat`** - Runs without any mid-test changes
+1. **`basic-test.bat`** - Basic stress test with random conditions
+2. **`high-load-test.bat`** - High load test with random conditions  
+3. **`utility-delay-test.bat`** - Manual delay setting utilities
+4. **`clean-test.bat`** - Reset all delays before testing
 
-## How Mid-Test Changes Work
+## How Random Stress Works
 
-### Delay Changes
-1. The stress test starts normally
-2. After approximately half the estimated execution time (minimum 5 seconds), a background task:
-   - 🔄 Sets delay to 1250ms on the default processor
-   - ⏳ Waits 3 seconds
-   - 🔄 Resets delay back to 0ms
-   - ✅ Completes the sequence
+### Dice Roll System
+1. At test start, rolls **1d4** to determine stress condition:
+   - **Roll 1**: Both high latency (1250ms) and failures
+   - **Roll 2**: Failures only
+   - **Roll 3**: High latency (1250ms) only  
+   - **Roll 4**: No stress conditions
 
-### Failure Simulation  
-1. The stress test starts normally
-2. After approximately half the estimated execution time + 2 seconds (offset from delay), a background task:
-   - 💥 Enables failures on the default processor
-   - ⏳ Waits 3 seconds
-   - 🔄 Disables failures back to normal
-   - ✅ Completes the sequence
+### Random Application Points
+2. If stress is enabled, it applies at **1-3 random request indices**:
+   - Applied between 10% and 90% of total requests
+   - Multiple stress points possible in one test
+   - Each application point shows in logs
 
-3. The main stress test continues and completes
-4. Results include the impact of both temporary delay and failure scenarios
+3. **Automatic cleanup** resets all conditions after test completion
 
 This simulates real-world scenarios like:
-- Database slowdowns during peak traffic
-- Network latency spikes
-- Temporary resource constraints
+- Unpredictable database slowdowns during peak traffic
+- Random network latency spikes
+- Sudden resource constraints
 - External service degradations
-- **Processor failures and recovery**
-- **Service circuit breaker activation**
+- **Random processor failures and recovery**
+- **Unexpected service circuit breaker activation**
+- **Real-world chaos engineering scenarios**
 
 ## Processor URLs
 

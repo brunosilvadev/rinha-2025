@@ -34,9 +34,9 @@ public class Program
             config.RequestCount, config.ThreadCount);
         _logger.LogInformation("Target URL: {BaseUrl}", config.BaseUrl);
 
-        // Roll for stress conditions
+        // Roll for stress conditions (unless disabled)
         var random = new Random();
-        var stressRoll = random.Next(1, 5); // 1d4 roll
+        var stressRoll = config.NoStress ? 4 : random.Next(1, 5); // Force roll 4 (no stress) if --no-stress flag is used
         
         var stressCondition = stressRoll switch
         {
@@ -47,7 +47,14 @@ public class Program
             _ => StressCondition.None
         };
 
-        _logger.LogInformation("🎲 Rolled {Roll}/4 for stress conditions", stressRoll);
+        if (config.NoStress)
+        {
+            _logger.LogInformation("🚫 Stress conditions DISABLED via --no-stress flag");
+        }
+        else
+        {
+            _logger.LogInformation("🎲 Rolled {Roll}/4 for stress conditions", stressRoll);
+        }
         
         var stressMessage = stressCondition switch
         {
@@ -113,6 +120,9 @@ public class Program
                     }
                     i++;
                     break;
+                case "--no-stress":
+                    config.NoStress = true;
+                    break;
                 case "-h" or "--help":
                     return null;
             }
@@ -133,6 +143,7 @@ public class Program
         Console.WriteLine("  -u, --url <url>          Base URL for the API (default: http://localhost:9999)");
         Console.WriteLine("  --set-delay <ms>         Set delay on processor in milliseconds");
         Console.WriteLine("  --processor <type>       Processor type: default or fallback (default: default)");
+        Console.WriteLine("  --no-stress              Disable random stress conditions (force clean test)");
         Console.WriteLine("  -h, --help               Show this help message");
         Console.WriteLine();
         Console.WriteLine("Stress Conditions:");
@@ -141,9 +152,11 @@ public class Program
         Console.WriteLine("  - 1/4 chance: Failures only");
         Console.WriteLine("  - 1/4 chance: High latency (1250ms) only");
         Console.WriteLine("  - 1/4 chance: No stress conditions");
+        Console.WriteLine("  Use --no-stress to guarantee no stress conditions are applied.");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  RinhaStressTester -r 1000 -t 20");
+        Console.WriteLine("  RinhaStressTester -r 1000 -t 20 --no-stress");
         Console.WriteLine("  RinhaStressTester --requests 5000 --threads 50 --url http://localhost:8080");
         Console.WriteLine("  RinhaStressTester --set-delay 1250 --processor default");
     }
@@ -473,6 +486,7 @@ public class StressTestConfig
     public TestMode Mode { get; set; } = TestMode.StressTest;
     public ProcessorType ProcessorType { get; set; } = ProcessorType.Default;
     public int SetDelayMs { get; set; } = 0;
+    public bool NoStress { get; set; } = false;
 }
 
 public enum TestMode

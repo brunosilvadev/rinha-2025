@@ -13,8 +13,6 @@ public class DecisionService
     
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(5);
     private const int LatencyThreshold = 1000; // 1000ms threshold
-    private const int MaxRetries = 3;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -33,84 +31,33 @@ public class DecisionService
     /// <summary>
     /// Decides which payment processor to use based on health checks and latency.
     /// Returns true for default processor, false for fallback processor.
-    /// Uses circuit breaker pattern to avoid infinite retries.
+    /// Optimized for speed - fails fast to meet p99 < 11ms target.
     /// </summary>
     public async Task<bool> DecidePaymentProcessor()
     {
-        for (int attempt = 0; attempt < MaxRetries; attempt++)
+        // Single attempt only - no retries for speed
+        // Check default processor health first (lower fees)
+        var defaultHealth = await GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
+        
+        // If default is healthy and fast, use it immediately
+        if (defaultHealth != null && !defaultHealth.Failing && defaultHealth.MinResponseTime < LatencyThreshold)
         {
-            // Check default processor health
-            var defaultHealth = await GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
-            
-            if (defaultHealth != null && !defaultHealth.Failing)
-            {
-                // Default processor is healthy, check latency
-                if (defaultHealth.MinResponseTime < LatencyThreshold)
-                {
-                    _logger.LogInformation("DECISION_RESULT: Using default processor - healthy and low latency ({Latency}ms)", defaultHealth.MinResponseTime);
-                    return true; // Use default processor
-                }
-                else
-                {
-                    _logger.LogInformation("DECISION_RESULT: Default processor latency too high ({Latency}ms), checking fallback", defaultHealth.MinResponseTime);
-                    
-                    // Check fallback processor health
-                    var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
-                    
-                    if (fallbackHealth != null && !fallbackHealth.Failing)
-                    {
-                        // Compare latencies - only use fallback if it's actually faster
-                        if (fallbackHealth.MinResponseTime < defaultHealth.MinResponseTime)
-                        {
-                            _logger.LogInformation("DECISION_RESULT: Using fallback processor - better latency ({FallbackLatency}ms vs {DefaultLatency}ms)", 
-                                fallbackHealth.MinResponseTime, defaultHealth.MinResponseTime);
-                            return false; // Use fallback processor
-                        }
-                        else
-                        {
-                            _logger.LogInformation("DECISION_RESULT: Using default processor - fallback latency not better ({FallbackLatency}ms vs {DefaultLatency}ms)", 
-                                fallbackHealth.MinResponseTime, defaultHealth.MinResponseTime);
-                            return true; // Use default as fallback is not faster
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("DECISION_RESULT: Fallback processor also unhealthy, using default despite high latency");
-                        return true; // Use default even with high latency if fallback is down
-                    }
-                }
-            }
-            else
-            {
-                _logger.LogWarning("DECISION_RESULT: Default processor is failing or unreachable, checking fallback");
-                
-                // Default processor is failing, check fallback
-                var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
-                
-                if (fallbackHealth != null && !fallbackHealth.Failing)
-                {
-                    _logger.LogInformation("DECISION_RESULT: Using fallback processor - default is failing");
-                    return false; // Use fallback processor
-                }
-                else
-                {
-                    _logger.LogWarning("DECISION_RESULT: Both processors are failing - attempt {Attempt}/{MaxAttempts}", attempt + 1, MaxRetries);
-                    
-                    // If this is the last attempt, fail fast with default processor
-                    if (attempt == MaxRetries - 1)
-                    {
-                        _logger.LogError("DECISION_RESULT: Both processors are failing after {MaxAttempts} attempts - defaulting to primary processor", MaxRetries);
-                        return true; // Default to primary processor as last resort
-                    }
-                    
-                    // Short delay before retry (non-blocking for other requests)
-                    await Task.Delay(RetryDelay);
-                }
-            }
+            _logger.LogDebug("DECISION_RESULT: Using default processor - healthy and low latency ({Latency}ms)", defaultHealth.MinResponseTime);
+            return true;
         }
         
-        // This should never be reached due to the logic above, but just in case
-        _logger.LogError("DECISION_RESULT: Unexpected end of decision logic - defaulting to primary processor");
+        // Check fallback only if default is problematic
+        var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
+        
+        // Use fallback if it's healthy (regardless of default state for speed)
+        if (fallbackHealth != null && !fallbackHealth.Failing)
+        {
+            _logger.LogDebug("DECISION_RESULT: Using fallback processor - default unavailable or slow");
+            return false;
+        }
+        
+        // Both problematic or unavailable - default to primary (lower fees)
+        _logger.LogDebug("DECISION_RESULT: Both processors problematic - defaulting to primary (lower fees)");
         return true;
     }
 
@@ -126,7 +73,6 @@ public class DecisionService
             var cachedData = await _redis.StringGetAsync(cacheKey);
             if (cachedData.HasValue)
             {
-                _logger.LogDebug("Using cached health check from Redis for {ProcessorKey}", processorKey);
                 var healthCheck = JsonSerializer.Deserialize<PaymentProcessorHealthCheck>(cachedData!, JsonOptions);
                 return healthCheck;
             }
@@ -148,7 +94,6 @@ public class DecisionService
                 var cachedData = await _redis.StringGetAsync(cacheKey);
                 if (cachedData.HasValue)
                 {
-                    _logger.LogDebug("Using cached health check from Redis for {ProcessorKey} (double-check)", processorKey);
                     var healthCheck = JsonSerializer.Deserialize<PaymentProcessorHealthCheck>(cachedData!, JsonOptions);
                     return healthCheck;
                 }
@@ -158,8 +103,6 @@ public class DecisionService
                 _logger.LogWarning(ex, "Failed to read health check from Redis cache during double-check for {ProcessorKey}", processorKey);
             }
 
-            _logger.LogDebug("Fetching fresh health check for {ProcessorKey}", processorKey);
-            
             // Fetch fresh health check
             var health = await healthCheckFunc();
             
@@ -170,7 +113,6 @@ public class DecisionService
                 {
                     var jsonData = JsonSerializer.Serialize(health, JsonOptions);
                     await _redis.StringSetAsync(cacheKey, jsonData, CacheExpiry);
-                    _logger.LogDebug("Cached health check in Redis for {ProcessorKey}", processorKey);
                 }
                 catch (Exception ex)
                 {

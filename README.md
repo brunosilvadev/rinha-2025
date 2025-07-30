@@ -5,11 +5,11 @@ Este projeto é uma submissão para a Rinha de Backend 2025, implementada em .NE
 ## TODO
 
 - [x] Implementar a lógica para decidir qual payment processor utilizar (rate limiting, caching)
-- [ ] Passar testes de performance
-- [ ] Avaliar necessidade de usar fila DLQ
-- [ ] Calcular taxa cobrada total final
+- [x] Passar testes de performance
+- [x] Avaliar necessidade de usar fila DLQ
+- [x] Calcular taxa cobrada total final
 - [ ] Limpar comentários
-- [ ] Revisar configurações de CPU e memória
+- [x] Revisar configurações de CPU e memória
 - [ ] Remover lógica desnecessária para minimizar o pacote
 
 
@@ -98,5 +98,5 @@ GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-21T23:59:5
 
 ### Recursos Configurados
 
-- **CPU Total:** 1.5 unidades (0.40 + 0.40 + 0.10 + 0.60 reserva)
-- **Memória Total:** 332MB (150MB + 150MB + 32MB)
+- **CPU Total:** 1.5 unidades (0.65 + 0.65 + 0.10 + 0.10)
+- **Memória Total:** 350MB (125MB + 125MB + 32MB + 68MB)

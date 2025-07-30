@@ -19,8 +19,16 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
     return ConnectionMultiplexer.Connect(configuration);
 });
 
-// Register services
-builder.Services.AddHttpClient<PaymentService>();
+// Register services with optimized HTTP clients
+builder.Services.AddHttpClient<PaymentService>(client =>
+{
+    // Optimize for speed
+    client.Timeout = TimeSpan.FromSeconds(5);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+{
+    MaxConnectionsPerServer = 100, // Allow more concurrent connections
+    UseProxy = false
+});
 builder.Services.AddSingleton<PaymentSummaryService>();
 builder.Services.AddSingleton<PaymentHealthCheckService>(provider =>
 {
