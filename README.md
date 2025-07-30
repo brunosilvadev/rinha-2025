@@ -4,12 +4,14 @@ Este projeto é uma submissão para a Rinha de Backend 2025, implementada em .NE
 
 ## TODO
 
-- [ ] Implementar a lógica para decidir qual payment processor utilizar (rate limiting, caching)
+- [x] Implementar a lógica para decidir qual payment processor utilizar (rate limiting, caching)
+- [ ] Passar testes de performance
+- [ ] Avaliar necessidade de usar fila DLQ
 - [ ] Calcular taxa cobrada total final
 - [ ] Limpar comentários
 - [ ] Revisar configurações de CPU e memória
 - [ ] Remover lógica desnecessária para minimizar o pacote
-- [ ] Passar testes de performance
+
 
 # Integração com Payment Processors - Rinha 2025
 

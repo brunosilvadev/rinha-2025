@@ -13,6 +13,8 @@ public class DecisionService
     
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(5);
     private const int LatencyThreshold = 1000; // 1000ms threshold
+    private const int MaxRetries = 3;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -31,10 +33,11 @@ public class DecisionService
     /// <summary>
     /// Decides which payment processor to use based on health checks and latency.
     /// Returns true for default processor, false for fallback processor.
+    /// Uses circuit breaker pattern to avoid infinite retries.
     /// </summary>
     public async Task<bool> DecidePaymentProcessor()
     {
-        while (true)
+        for (int attempt = 0; attempt < MaxRetries; attempt++)
         {
             // Check default processor health
             var defaultHealth = await GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
@@ -91,12 +94,24 @@ public class DecisionService
                 }
                 else
                 {
-                    _logger.LogError("Both processors are failing - waiting 5 seconds before retry");
-                    await Task.Delay(5000); // Wait 5 seconds before trying again
-                    continue; // Retry the decision loop
+                    _logger.LogWarning("Both processors are failing - attempt {Attempt}/{MaxAttempts}", attempt + 1, MaxRetries);
+                    
+                    // If this is the last attempt, fail fast with default processor
+                    if (attempt == MaxRetries - 1)
+                    {
+                        _logger.LogError("Both processors are failing after {MaxAttempts} attempts - defaulting to primary processor", MaxRetries);
+                        return true; // Default to primary processor as last resort
+                    }
+                    
+                    // Short delay before retry (non-blocking for other requests)
+                    await Task.Delay(RetryDelay);
                 }
             }
         }
+        
+        // This should never be reached due to the logic above, but just in case
+        _logger.LogError("Unexpected end of decision logic - defaulting to primary processor");
+        return true;
     }
 
     private async Task<PaymentProcessorHealthCheck?> GetCachedHealthCheckAsync(
