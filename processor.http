@@ -1,0 +1,128 @@
+# ===========================================
+# PAYMENT PROCESSOR DIRECT TESTING
+# ===========================================
+# This file contains requests to test the payment processors directly
+# as per Rinha de Backend 2025 specifications
+# 
+# Payment Processor Default: http://localhost:8001
+# Payment Processor Fallback: http://localhost:8002
+# ===========================================
+
+@defaultProcessorUrl = http://localhost:8001
+@fallbackProcessorUrl = http://localhost:8002
+@adminToken = 123
+
+# ===========================================
+# DEFAULT PROCESSOR TESTS
+# ===========================================
+
+# 1. GET PAYMENT BY ID (Default Processor)
+GET {{defaultProcessorUrl}}/payments/550e8400-e29b-41d4-a716-446655440001
+
+###
+
+# 2. SERVICE HEALTH CHECK (Default Processor)
+# NOTE: Limited to 1 call per 5 seconds - will return HTTP 429 if exceeded
+GET {{defaultProcessorUrl}}/payments/service-health
+
+###
+
+# 3. ADMIN - PAYMENTS SUMMARY (Default Processor)
+GET {{defaultProcessorUrl}}/admin/payments-summary
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# 4. ADMIN - PAYMENTS SUMMARY WITH DATE RANGE (Default Processor)
+GET {{defaultProcessorUrl}}/admin/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# 5. ADMIN - PURGE PAYMENTS (Default Processor)
+POST {{defaultProcessorUrl}}/admin/purge-payments
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# ===========================================
+# FALLBACK PROCESSOR TESTS
+# ===========================================
+
+# 6. GET PAYMENT BY ID (Fallback Processor)
+GET {{fallbackProcessorUrl}}/payments/550e8400-e29b-41d4-a716-446655440001
+
+###
+
+# 7. SERVICE HEALTH CHECK (Fallback Processor)
+# NOTE: Limited to 1 call per 5 seconds - will return HTTP 429 if exceeded
+GET {{fallbackProcessorUrl}}/payments/service-health
+
+###
+
+# 8. ADMIN - PAYMENTS SUMMARY (Fallback Processor)
+GET {{fallbackProcessorUrl}}/admin/payments-summary
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# 9. ADMIN - PAYMENTS SUMMARY WITH DATE RANGE (Fallback Processor)
+GET {{fallbackProcessorUrl}}/admin/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:59Z
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# 10. ADMIN - PURGE PAYMENTS (Fallback Processor)
+POST {{fallbackProcessorUrl}}/admin/purge-payments
+X-Rinha-Token: {{adminToken}}
+
+###
+
+# ===========================================
+# ADMIN CONFIGURATION TESTS (Optional)
+# ===========================================
+# These endpoints allow you to simulate failures and delays for testing
+
+# 11. SET DELAY (Default Processor) - Add 500ms delay
+PUT {{defaultProcessorUrl}}/admin/configurations/delay
+X-Rinha-Token: {{adminToken}}
+Content-Type: application/json
+
+{
+    "delay": 500
+}
+
+###
+
+# 12. SET FAILURE (Default Processor) - Enable failures
+PUT {{defaultProcessorUrl}}/admin/configurations/failure
+X-Rinha-Token: {{adminToken}}
+Content-Type: application/json
+
+{
+    "failure": true
+}
+
+###
+
+# 13. RESET FAILURE (Default Processor) - Disable failures
+PUT {{defaultProcessorUrl}}/admin/configurations/failure
+X-Rinha-Token: {{adminToken}}
+Content-Type: application/json
+
+{
+    "failure": false
+}
+
+###
+
+# 14. RESET DELAY (Default Processor) - Remove delay
+PUT {{defaultProcessorUrl}}/admin/configurations/delay
+X-Rinha-Token: {{adminToken}}
+Content-Type: application/json
+
+{
+    "delay": 0
+}
+
+###
