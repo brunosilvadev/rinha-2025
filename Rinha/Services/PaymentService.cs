@@ -4,6 +4,8 @@ using Rinha.Models;
 
 namespace Rinha.Services;
 
+public record PaymentResult(bool Success, string ProcessorUsed);
+
 public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<PaymentService> logger,
     PaymentSummaryService summaryService, DecisionService decisionService, string defaultProcessorUrl, string fallbackProcessorUrl)
 {
@@ -38,9 +40,13 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         // Retry the entire payment process with exponential backoff
         for (int attempt = 0; attempt < MaxRetries; attempt++)
         {
-            bool success = await TryProcessPaymentWithFallback(paymentData, paymentRequest.Amount, attempt);
-            if (success)
+            var result = await TryProcessPaymentWithFallback(paymentData, paymentRequest.Amount, attempt);
+            if (result.Success)
             {
+                // Record in Redis only when we know which processor actually processed it
+                await _summaryService.IncrementPaymentAsync(result.ProcessorUsed, paymentRequest.Amount);
+                _logger.LogInformation("Payment {CorrelationId} successfully processed by {ProcessorType} processor", 
+                    paymentRequest.CorrelationId, result.ProcessorUsed);
                 return true;
             }
 
@@ -59,52 +65,52 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         return false;
     }
 
-    private async Task<bool> TryProcessPaymentWithFallback(object paymentData, decimal amount, int attemptNumber)
+    private async Task<PaymentResult> TryProcessPaymentWithFallback(object paymentData, decimal amount, int attemptNumber)
     {
         // Use DecisionService to determine the preferred processor
         bool preferDefaultProcessor = await _decisionService.DecidePaymentProcessor();
         
+        string primaryProcessorUrl;
+        string primaryProcessorType;
+        string fallbackProcessorUrl_local;
+        string fallbackProcessorType;
+        
         if (preferDefaultProcessor)
         {
-            // Try default processor first, fallback to fallback processor if it fails
-            if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default", amount))
-            {
-                return true;
-            }
-            
-            _logger.LogWarning("Default processor failed despite being recommended (attempt {Attempt}), trying fallback for correlation ID: {CorrelationId}", 
-                attemptNumber + 1, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
-            
-            // Fallback to the other processor
-            if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback", amount))
-            {
-                return true;
-            }
+            primaryProcessorUrl = _defaultProcessorUrl;
+            primaryProcessorType = "default";
+            fallbackProcessorUrl_local = _fallbackProcessorUrl;
+            fallbackProcessorType = "fallback";
         }
         else
         {
-            // Try fallback processor first, fallback to default processor if it fails
-            if (await TryProcessPayment(_fallbackProcessorUrl, paymentData, "fallback", amount))
-            {
-                return true;
-            }
-            
-            _logger.LogWarning("Fallback processor failed despite being recommended (attempt {Attempt}), trying default for correlation ID: {CorrelationId}", 
-                attemptNumber + 1, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
-            
-            // Fallback to the other processor
-            if (await TryProcessPayment(_defaultProcessorUrl, paymentData, "default", amount))
-            {
-                return true;
-            }
+            primaryProcessorUrl = _fallbackProcessorUrl;
+            primaryProcessorType = "fallback";
+            fallbackProcessorUrl_local = _defaultProcessorUrl;
+            fallbackProcessorType = "default";
+        }
+        
+        // Try primary processor first
+        if (await TryProcessPaymentCall(primaryProcessorUrl, paymentData))
+        {
+            return new PaymentResult(true, primaryProcessorType);
+        }
+        
+        _logger.LogWarning("{ProcessorType} processor failed (attempt {Attempt}), trying {FallbackType} for correlation ID: {CorrelationId}", 
+            primaryProcessorType, attemptNumber + 1, fallbackProcessorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
+        
+        // Try fallback processor
+        if (await TryProcessPaymentCall(fallbackProcessorUrl_local, paymentData))
+        {
+            return new PaymentResult(true, fallbackProcessorType);
         }
 
         _logger.LogWarning("Both processors failed on attempt {Attempt} for correlation ID: {CorrelationId}", 
             attemptNumber + 1, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
-        return false;
+        return new PaymentResult(false, "none");
     }
 
-    private async Task<bool> TryProcessPayment(string processorUrl, object paymentData, string processorType, decimal amount)
+    private async Task<bool> TryProcessPaymentCall(string processorUrl, object paymentData)
     {
         try
         {
@@ -118,24 +124,21 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
 
             if (response.IsSuccessStatusCode)
             {
-                // Track successful payment in Redis
-                await _summaryService.IncrementPaymentAsync(processorType, amount);
-
-                _logger.LogInformation("Payment processed successfully via {ProcessorType} processor for correlation ID: {CorrelationId}",
-                    processorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
+                _logger.LogInformation("Payment processed successfully for correlation ID: {CorrelationId}",
+                    paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
                 return true;
             }
             else
             {
-                _logger.LogWarning("{ProcessorType} processor failed for correlation ID: {CorrelationId}. Status: {StatusCode}",
-                    processorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData), response.StatusCode);
+                _logger.LogWarning("Payment processor failed for correlation ID: {CorrelationId}. Status: {StatusCode}",
+                    paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData), response.StatusCode);
                 return false;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "{ProcessorType} processor error for correlation ID: {CorrelationId}",
-                processorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
+            _logger.LogWarning(ex, "Payment processor error for correlation ID: {CorrelationId}",
+                paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
             return false;
         }
     }
