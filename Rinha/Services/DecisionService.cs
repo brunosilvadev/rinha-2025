@@ -47,12 +47,12 @@ public class DecisionService
                 // Default processor is healthy, check latency
                 if (defaultHealth.MinResponseTime < LatencyThreshold)
                 {
-                    _logger.LogDebug("Using default processor - healthy and low latency ({Latency}ms)", defaultHealth.MinResponseTime);
+                    _logger.LogInformation("DECISION_RESULT: Using default processor - healthy and low latency ({Latency}ms)", defaultHealth.MinResponseTime);
                     return true; // Use default processor
                 }
                 else
                 {
-                    _logger.LogInformation("Default processor latency too high ({Latency}ms), checking fallback", defaultHealth.MinResponseTime);
+                    _logger.LogInformation("DECISION_RESULT: Default processor latency too high ({Latency}ms), checking fallback", defaultHealth.MinResponseTime);
                     
                     // Check fallback processor health
                     var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
@@ -62,44 +62,44 @@ public class DecisionService
                         // Compare latencies - only use fallback if it's actually faster
                         if (fallbackHealth.MinResponseTime < defaultHealth.MinResponseTime)
                         {
-                            _logger.LogInformation("Using fallback processor - better latency ({FallbackLatency}ms vs {DefaultLatency}ms)", 
+                            _logger.LogInformation("DECISION_RESULT: Using fallback processor - better latency ({FallbackLatency}ms vs {DefaultLatency}ms)", 
                                 fallbackHealth.MinResponseTime, defaultHealth.MinResponseTime);
                             return false; // Use fallback processor
                         }
                         else
                         {
-                            _logger.LogInformation("Using default processor - fallback latency not better ({FallbackLatency}ms vs {DefaultLatency}ms)", 
+                            _logger.LogInformation("DECISION_RESULT: Using default processor - fallback latency not better ({FallbackLatency}ms vs {DefaultLatency}ms)", 
                                 fallbackHealth.MinResponseTime, defaultHealth.MinResponseTime);
                             return true; // Use default as fallback is not faster
                         }
                     }
                     else
                     {
-                        _logger.LogWarning("Fallback processor also unhealthy, using default despite high latency");
+                        _logger.LogWarning("DECISION_RESULT: Fallback processor also unhealthy, using default despite high latency");
                         return true; // Use default even with high latency if fallback is down
                     }
                 }
             }
             else
             {
-                _logger.LogWarning("Default processor is failing or unreachable, checking fallback");
+                _logger.LogWarning("DECISION_RESULT: Default processor is failing or unreachable, checking fallback");
                 
                 // Default processor is failing, check fallback
                 var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
                 
                 if (fallbackHealth != null && !fallbackHealth.Failing)
                 {
-                    _logger.LogInformation("Using fallback processor - default is failing");
+                    _logger.LogInformation("DECISION_RESULT: Using fallback processor - default is failing");
                     return false; // Use fallback processor
                 }
                 else
                 {
-                    _logger.LogWarning("Both processors are failing - attempt {Attempt}/{MaxAttempts}", attempt + 1, MaxRetries);
+                    _logger.LogWarning("DECISION_RESULT: Both processors are failing - attempt {Attempt}/{MaxAttempts}", attempt + 1, MaxRetries);
                     
                     // If this is the last attempt, fail fast with default processor
                     if (attempt == MaxRetries - 1)
                     {
-                        _logger.LogError("Both processors are failing after {MaxAttempts} attempts - defaulting to primary processor", MaxRetries);
+                        _logger.LogError("DECISION_RESULT: Both processors are failing after {MaxAttempts} attempts - defaulting to primary processor", MaxRetries);
                         return true; // Default to primary processor as last resort
                     }
                     
@@ -110,7 +110,7 @@ public class DecisionService
         }
         
         // This should never be reached due to the logic above, but just in case
-        _logger.LogError("Unexpected end of decision logic - defaulting to primary processor");
+        _logger.LogError("DECISION_RESULT: Unexpected end of decision logic - defaulting to primary processor");
         return true;
     }
 
