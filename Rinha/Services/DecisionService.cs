@@ -21,11 +21,11 @@ public class CircuitBreakerData
     public DateTime LastStateChange { get; set; } = DateTime.UtcNow;
 }
 
-public class DecisionService
+public class DecisionService(PaymentHealthCheckService healthCheckService, ILogger<DecisionService> logger, IConnectionMultiplexer redis)
 {
-    private readonly PaymentHealthCheckService _healthCheckService;
-    private readonly ILogger<DecisionService> _logger;
-    private readonly IDatabase _redis;
+    private readonly PaymentHealthCheckService _healthCheckService = healthCheckService;
+    private readonly ILogger<DecisionService> _logger = logger;
+    private readonly IDatabase _redis = redis.GetDatabase();
     
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(5);
     private const int LatencyThreshold = 1000; // 1000ms threshold
@@ -33,7 +33,7 @@ public class DecisionService
     // Circuit breaker settings
     private const int FailureThreshold = 5;
     private const int SuccessThreshold = 3;
-    private static readonly TimeSpan OpenCircuitTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan OpenCircuitTimeout = TimeSpan.FromSeconds(5);
     
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -42,13 +42,6 @@ public class DecisionService
 
     // Local lock to prevent multiple threads from fetching the same health check simultaneously
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fetchLocks = new();
-
-    public DecisionService(PaymentHealthCheckService healthCheckService, ILogger<DecisionService> logger, IConnectionMultiplexer redis)
-    {
-        _healthCheckService = healthCheckService;
-        _logger = logger;
-        _redis = redis.GetDatabase();
-    }
 
     /// <summary>
     /// Decides which payment processor to use based on health checks, latency, and circuit breaker state.
@@ -74,10 +67,44 @@ public class DecisionService
             return true;
         }
         
+        // If default circuit is half-open, check health first before testing with real traffic
+        if (defaultCircuitState.State == CircuitBreakerState.HalfOpen)
+        {
+            var defaultHealthCheck = await GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
+            if (defaultHealthCheck != null && !defaultHealthCheck.Failing)
+            {
+                _logger.LogDebug("DECISION_RESULT: Using default processor - circuit is HALF-OPEN and health check passed");
+                return true;
+            }
+            else
+            {
+                _logger.LogDebug("DECISION_RESULT: Using fallback processor - default circuit is HALF-OPEN but health check failed");
+                return false;
+            }
+        }
+        
         // If fallback circuit is open, prefer default
         if (fallbackCircuitState.State == CircuitBreakerState.Open)
         {
             _logger.LogDebug("DECISION_RESULT: Using default processor - fallback circuit breaker is OPEN");
+            return true;
+        }
+        
+        // If fallback circuit is half-open, check health first before testing
+        if (fallbackCircuitState.State == CircuitBreakerState.HalfOpen)
+        {
+            var fallbackHealthCheck = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
+            if (fallbackHealthCheck != null && !fallbackHealthCheck.Failing)
+            {
+                // Give fallback a 20% chance to test recovery when healthy, otherwise use default
+                var testFallback = Random.Shared.Next(100) < 20;
+                if (testFallback)
+                {
+                    _logger.LogDebug("DECISION_RESULT: Using fallback processor - circuit is HALF-OPEN, health passed, testing recovery");
+                    return false;
+                }
+            }
+            _logger.LogDebug("DECISION_RESULT: Using default processor - fallback is HALF-OPEN but health failed or not testing this time");
             return true;
         }
         

@@ -291,10 +291,18 @@ public class Program
                     break;
                     
                 case StressCondition.DelayOnly:
-                    _logger.LogInformation("� APPLYING STRESS at request {Index}: High latency only", requestIndex);
+                    _logger.LogInformation("🔥 APPLYING STRESS at request {Index}: High latency only", requestIndex);
                     await SetProcessorDelayInternal("http://localhost:8001", 1250, "Default");
                     break;
             }
+
+            // Wait for 3 seconds while the stress condition is active
+            _logger.LogInformation("⏳ Stress condition active for 3 seconds at request {Index}...", requestIndex);
+            await Task.Delay(3000);
+
+            // Reset the stress condition
+            _logger.LogInformation("🔄 Resetting stress condition at request {Index}", requestIndex);
+            await ResetStressConditionsInternal();
         }
         catch (Exception ex)
         {
@@ -303,6 +311,12 @@ public class Program
     }
 
     private static async Task ResetStressConditions()
+    {
+        _logger.LogInformation("🔄 Resetting all stress conditions...");
+        await ResetStressConditionsInternal();
+    }
+
+    private static async Task ResetStressConditionsInternal()
     {
         try
         {

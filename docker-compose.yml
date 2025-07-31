@@ -8,6 +8,7 @@ services:
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - REDIS_CONNECTION_STRING=redis:6379
+      - Logging__LogLevel__Default=Debug
     expose:
       - "8080"
     networks:
@@ -28,6 +29,7 @@ services:
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
       - REDIS_CONNECTION_STRING=redis:6379
+      - Logging__LogLevel__Default=Debug
     expose:
       - "8080"
     networks:
