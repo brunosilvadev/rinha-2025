@@ -1,5 +1,8 @@
 # Rinha Stress Tester
 
+<img width="984" height="984" alt="image" src="https://github.com/user-attachments/assets/4fd152e3-63ca-4da1-8eb3-8aec40e04121" />
+
+
 > Este arquivo README, bem como toda esta ferramenta de teste foi construída no estilo vibe coding usando GitHub Copilot Agent Mode baseado no modelo Claude Sonnet 4
 
 Uma ferramenta abrangente de teste de carga .NET 9 para o desafio Rinha de Backend 2025 com recursos avançados incluindo **simulação de delay no meio do teste**.
