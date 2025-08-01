@@ -33,7 +33,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
 // Configure HTTP clients with connection pooling
 builder.Services.AddHttpClient("PaymentProcessor", client =>
 {
-    client.Timeout = TimeSpan.FromMilliseconds(1000); // Increased for payment processing
+    client.Timeout = TimeSpan.FromMilliseconds(1000);
     client.DefaultRequestHeaders.Connection.Add("keep-alive");
     client.DefaultRequestHeaders.ConnectionClose = false;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
