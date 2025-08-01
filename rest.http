@@ -21,6 +21,11 @@ GET {{baseUrl}}/payments-summary?from=2025-07-01T00:00:00Z&to=2025-07-31T23:59:5
 
 ###
 
+GET {{baseUrl}}/payments-summary
+
+###
+
+
 # ===========================================
 # 3. RESETAR REDIS - Começar com estado limpo
 # ===========================================
