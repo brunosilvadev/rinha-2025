@@ -1,5 +1,7 @@
 services:
   api1:
+    # TODO: Replace with your published Docker image
+    # Example: image: yourdockerhubusername/rinha-2025:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -21,6 +23,8 @@ services:
           memory: 125M
 
   api2:
+    # TODO: Replace with your published Docker image
+    # Example: image: yourdockerhubusername/rinha-2025:latest
     build:
       context: .
       dockerfile: Dockerfile

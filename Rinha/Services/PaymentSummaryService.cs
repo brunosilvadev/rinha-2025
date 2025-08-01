@@ -33,6 +33,70 @@ public class PaymentSummaryService(IConnectionMultiplexer redis, ILogger<Payment
         }
     }
 
+    public async Task<SummaryResponse> GetSummaryAsync(DateTime? from = null, DateTime? to = null)
+    {
+        // If no dates provided, get all payments
+        if (!from.HasValue && !to.HasValue)
+        {
+            return await GetAllPaymentsSummaryAsync();
+        }
+
+        // If only one date provided, set reasonable defaults
+        var fromDate = from ?? DateTime.MinValue;
+        var toDate = to ?? DateTime.MaxValue;
+
+        return await GetSummaryAsync(fromDate, toDate);
+    }
+
+    private async Task<SummaryResponse> GetAllPaymentsSummaryAsync()
+    {
+        try
+        {
+            // Get all payments from both processors
+            var defaultPayments = await _database.SortedSetRangeByScoreAsync(DefaultPaymentsKey, double.NegativeInfinity, double.PositiveInfinity);
+            var fallbackPayments = await _database.SortedSetRangeByScoreAsync(FallbackPaymentsKey, double.NegativeInfinity, double.PositiveInfinity);
+
+            // Calculate totals for default processor
+            var defaultTotalRequests = defaultPayments.Length;
+            var defaultTotalAmount = CalculateTotalAmount(defaultPayments);
+
+            // Calculate totals for fallback processor
+            var fallbackTotalRequests = fallbackPayments.Length;
+            var fallbackTotalAmount = CalculateTotalAmount(fallbackPayments);
+
+            var summary = new SummaryResponse
+            {
+                Default = new PaymentProcessorSummary
+                {
+                    TotalRequests = defaultTotalRequests,
+                    TotalAmount = defaultTotalAmount
+                },
+                Fallback = new PaymentProcessorSummary
+                {
+                    TotalRequests = fallbackTotalRequests,
+                    TotalAmount = fallbackTotalAmount
+                }
+            };
+
+            _logger.LogDebug("Retrieved all payments summary: Default({DefaultRequests}, {DefaultAmount}), Fallback({FallbackRequests}, {FallbackAmount})",
+                summary.Default.TotalRequests, summary.Default.TotalAmount,
+                summary.Fallback.TotalRequests, summary.Fallback.TotalAmount);
+
+            return summary;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve all payments summary");
+            
+            // Return empty summary on error
+            return new SummaryResponse
+            {
+                Default = new PaymentProcessorSummary(),
+                Fallback = new PaymentProcessorSummary()
+            };
+        }
+    }
+
     public async Task<SummaryResponse> GetSummaryAsync(DateTime from, DateTime to)
     {
         try

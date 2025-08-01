@@ -22,10 +22,22 @@ public static class PaymentEndpoints
 
         app.MapGet("/payments-summary", async (string? from, string? to, PaymentSummaryService summaryService) =>
         {
-            // Fast validation - minimal error handling for speed
-            if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to) ||
-                !DateTime.TryParse(from, out var fromDate) || !DateTime.TryParse(to, out var toDate) ||
-                fromDate > toDate)
+            DateTime? fromDate = null;
+            DateTime? toDate = null;
+
+            // Parse optional date parameters
+            if (!string.IsNullOrEmpty(from) && DateTime.TryParse(from, out var parsedFrom))
+            {
+                fromDate = parsedFrom;
+            }
+            
+            if (!string.IsNullOrEmpty(to) && DateTime.TryParse(to, out var parsedTo))
+            {
+                toDate = parsedTo;
+            }
+
+            // Validate date range if both are provided
+            if (fromDate.HasValue && toDate.HasValue && fromDate > toDate)
             {
                 return Results.BadRequest();
             }
