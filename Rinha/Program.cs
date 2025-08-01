@@ -19,31 +19,29 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
     return ConnectionMultiplexer.Connect(configuration);
 });
 
-// Register services with optimized HTTP clients
 builder.Services.AddHttpClient<PaymentService>(client =>
 {
-    // Optimize for speed
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(1);
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
 {
-    MaxConnectionsPerServer = 100, // Allow more concurrent connections
+    MaxConnectionsPerServer = 100,
     UseProxy = false
 });
 builder.Services.AddSingleton<PaymentSummaryService>();
-builder.Services.AddSingleton<PaymentHealthCheckService>(provider =>
+builder.Services.AddSingleton(provider =>
 {
     var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
     var logger = provider.GetRequiredService<ILogger<PaymentHealthCheckService>>();
     return new PaymentHealthCheckService(httpClientFactory, logger, defaultProcessorUrl, fallbackProcessorUrl);
 });
-builder.Services.AddSingleton<DecisionService>(provider =>
+builder.Services.AddSingleton(provider =>
 {
     var healthCheckService = provider.GetRequiredService<PaymentHealthCheckService>();
     var logger = provider.GetRequiredService<ILogger<DecisionService>>();
     var redis = provider.GetRequiredService<IConnectionMultiplexer>();
     return new DecisionService(healthCheckService, logger, redis);
 });
-builder.Services.AddSingleton<PaymentService>(provider =>
+builder.Services.AddSingleton(provider =>
 {
     var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
     var logger = provider.GetRequiredService<ILogger<PaymentService>>();
@@ -56,7 +54,6 @@ var app = builder.Build();
 
 app.MapGet("/", () => "It's time for Rinha 2025!");
 
-// Register payment endpoints
 app.MapPaymentEndpoints();
 
 app.Run();

@@ -8,10 +8,10 @@ Este projeto é uma submissão para a Rinha de Backend 2025, implementada em .NE
 - [x] Passar testes de performance
 - [x] Avaliar necessidade de usar fila DLQ
 - [x] Calcular taxa cobrada total final
-- [ ] Limpar comentários
+- [x] Limpar comentários
 - [x] Revisar configurações de CPU e memória
-- [ ] Remover lógica desnecessária para minimizar o pacote
-- [ ] Remover arquivos desnecessários do repositório
+- [x] Remover lógica desnecessária para minimizar o pacote
+- [x] Remover arquivos desnecessários do repositório
 
 
 # Integração com Payment Processors - Rinha 2025

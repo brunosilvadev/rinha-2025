@@ -114,7 +114,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         try
         {
             using var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(30);
+            httpClient.Timeout = TimeSpan.FromSeconds(1);
 
             var json = JsonSerializer.Serialize(paymentData, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
