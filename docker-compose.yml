@@ -1,10 +1,6 @@
 services:
   api1:
-    # TODO: Replace with your published Docker image
-    # Example: image: yourdockerhubusername/rinha-2025:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: brunosilvadev/rinha-2025:latest
     environment:
       - ASPNETCORE_URLS=http://*:8080
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
@@ -23,11 +19,7 @@ services:
           memory: 125M
 
   api2:
-    # TODO: Replace with your published Docker image
-    # Example: image: yourdockerhubusername/rinha-2025:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: brunosilvadev/rinha-2025:latest
     environment:
       - ASPNETCORE_URLS=http://*:8080
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
