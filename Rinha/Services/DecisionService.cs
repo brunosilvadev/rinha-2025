@@ -28,8 +28,8 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
     private readonly IDatabase _redis = redis.GetDatabase();
     
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(5);
-    private const int LatencyThreshold = 1000; // 1000ms threshold
-    
+    private const int LatencyThreshold = 500; // 500ms threshold
+
     // Circuit breaker settings
     private const int FailureThreshold = 5;
     private const int SuccessThreshold = 3;
