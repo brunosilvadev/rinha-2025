@@ -1,206 +1,208 @@
 # Rinha Stress Tester
 
-A comprehensive .NET 9 load testing tool for the Rinha de Backend 2025 challenge with advanced features including **mid-test delay simulation**.
+> Este arquivo README, bem como toda esta ferramenta de teste foi construída no estilo vibe coding usando GitHub Copilot Agent Mode baseado no modelo Claude Sonnet 4
 
-## 🔥 New Features
+Uma ferramenta abrangente de teste de carga .NET 9 para o desafio Rinha de Backend 2025 com recursos avançados incluindo **simulação de delay no meio do teste**.
 
-### Random Stress Condition System
-The stress tester uses a **dice roll system** to randomly apply stress conditions during tests:
+## 🔥 Novos Recursos
 
-- **1d4 Roll** determines which stress condition to apply
-- **25% chance each** for: Both delay+failure, Failure only, Delay only, or No stress
-- **Can be disabled** with `--no-stress` flag for guaranteed clean tests
-- **Applied at random points** during the test (between 10% and 90% completion)
+### Sistema de Condições de Estresse Aleatórias
+O testador de estresse usa um **sistema de rolagem de dados** para aplicar aleatoriamente condições de estresse durante os testes:
 
-### Stress Conditions Applied
-When stress is triggered, it can include:
+- **Rolagem 1d4** determina qual condição de estresse aplicar
+- **25% de chance cada** para: Delay+falha, Apenas falha, Apenas delay, ou Sem estresse
+- **Pode ser desabilitado** com a flag `--no-stress` para testes limpos garantidos
+- **Aplicado em pontos aleatórios** durante o teste (entre 10% e 90% de conclusão)
 
-- **High Latency**: Sets 1250ms delay on default processor
-- **Failures**: Enables failures on default processor  
-- **Random Timing**: Applied at 1-3 random points during test execution
-- **Automatic Reset**: All conditions are reset after test completion
+### Condições de Estresse Aplicadas
+Quando o estresse é acionado, pode incluir:
 
-This simulates real-world unpredictable scenarios during peak load!
+- **Alta Latência**: Define delay de 1250ms no processador padrão
+- **Falhas**: Habilita falhas no processador padrão  
+- **Timing Aleatório**: Aplicado em 1-3 pontos aleatórios durante a execução do teste
+- **Reset Automático**: Todas as condições são resetadas após a conclusão do teste
 
-## Usage
+Isso simula cenários imprevisíveis do mundo real durante picos de carga!
 
-### Basic Usage
+## Uso
+
+### Uso Básico
 ```bash
-# Basic stress test with random stress conditions (1d4 roll system)
+# Teste de estresse básico com condições aleatórias (sistema de rolagem 1d4)
 dotnet run -- -r 1000 -t 20
 
-# Clean test with NO stress conditions (guaranteed)
+# Teste limpo SEM condições de estresse (garantido)
 dotnet run -- -r 1000 -t 20 --no-stress
 
-# Higher load test with random conditions
+# Teste de carga mais alta com condições aleatórias
 dotnet run -- -r 5000 -t 50 --url http://localhost:9999
 
-# Manually set processor delay (utility mode - no stress test)
+# Definir delay do processador manualmente (modo utilitário - sem teste de estresse)
 dotnet run -- --set-delay 1250 --processor default
 dotnet run -- --set-delay 500 --processor fallback
-dotnet run -- --set-delay 0 --processor default  # Reset delay
+dotnet run -- --set-delay 0 --processor default  # Resetar delay
 ```
 
-### Command Line Options
+### Opções de Linha de Comando
 
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--requests` | `-r` | Number of requests to send (required for stress test) | - |
-| `--threads` | `-t` | Number of concurrent threads | 10 |
-| `--url` | `-u` | Base URL for the API | http://localhost:9999 |
-| `--set-delay` | - | Set delay on processor in milliseconds (utility mode) | - |
-| `--processor` | - | Processor type: default or fallback | default |
-| `--no-stress` | - | Disable random stress conditions (force clean test) | false |
-| `--help` | `-h` | Show help message | - |
+| Opção | Curta | Descrição | Padrão |
+|-------|-------|-----------|---------|
+| `--requests` | `-r` | Número de requisições para enviar (obrigatório para teste de estresse) | - |
+| `--threads` | `-t` | Número de threads concorrentes | 10 |
+| `--url` | `-u` | URL base para a API | http://localhost:9999 |
+| `--set-delay` | - | Definir delay no processador em milissegundos (modo utilitário) | - |
+| `--processor` | - | Tipo de processador: default ou fallback | default |
+| `--no-stress` | - | Desabilitar condições de estresse aleatórias (forçar teste limpo) | false |
+| `--help` | `-h` | Mostrar mensagem de ajuda | - |
 
-**Note**: By default, stress conditions are applied randomly via 1d4 dice roll. Use `--no-stress` to guarantee no stress conditions.
+**Nota**: Por padrão, condições de estresse são aplicadas aleatoriamente via rolagem 1d4. Use `--no-stress` para garantir nenhuma condição de estresse.
 
-## Demo Scripts
+## Scripts de Demonstração
 
-Since stress conditions are now random, demo scripts would show different stress patterns:
+Como as condições de estresse agora são aleatórias, os scripts de demonstração mostrariam diferentes padrões de estresse:
 
-1. **`basic-test.bat`** - Basic stress test with random conditions
-2. **`high-load-test.bat`** - High load test with random conditions  
-3. **`utility-delay-test.bat`** - Manual delay setting utilities
-4. **`clean-test.bat`** - Reset all delays before testing
+1. **`basic-test.bat`** - Teste de estresse básico com condições aleatórias
+2. **`high-load-test.bat`** - Teste de carga alta com condições aleatórias  
+3. **`utility-delay-test.bat`** - Utilitários de configuração de delay manual
+4. **`clean-test.bat`** - Resetar todos os delays antes de testar
 
-## How Random Stress Works
+## Como Funciona o Estresse Aleatório
 
-### Dice Roll System
-1. At test start, rolls **1d4** to determine stress condition:
-   - **Roll 1**: Both high latency (1250ms) and failures
-   - **Roll 2**: Failures only
-   - **Roll 3**: High latency (1250ms) only  
-   - **Roll 4**: No stress conditions
+### Sistema de Rolagem de Dados
+1. No início do teste, rola **1d4** para determinar condição de estresse:
+   - **Rolagem 1**: Ambos alta latência (1250ms) e falhas
+   - **Rolagem 2**: Apenas falhas
+   - **Rolagem 3**: Apenas alta latência (1250ms)  
+   - **Rolagem 4**: Nenhuma condição de estresse
 
-### Random Application Points
-2. If stress is enabled, it applies at **1-3 random request indices**:
-   - Applied between 10% and 90% of total requests
-   - Multiple stress points possible in one test
-   - Each application point shows in logs
+### Pontos de Aplicação Aleatórios
+2. Se o estresse estiver habilitado, aplica em **1-3 índices de requisição aleatórios**:
+   - Aplicado entre 10% e 90% do total de requisições
+   - Múltiplos pontos de estresse possíveis em um teste
+   - Cada ponto de aplicação aparece nos logs
 
-3. **Automatic cleanup** resets all conditions after test completion
+3. **Limpeza automática** reseta todas as condições após conclusão do teste
 
-This simulates real-world scenarios like:
-- Unpredictable database slowdowns during peak traffic
-- Random network latency spikes
-- Sudden resource constraints
-- External service degradations
-- **Random processor failures and recovery**
-- **Unexpected service circuit breaker activation**
-- **Real-world chaos engineering scenarios**
+Isso simula cenários do mundo real como:
+- Lentidões imprevisíveis do banco de dados durante tráfego de pico
+- Picos aleatórios de latência de rede
+- Restrições súbitas de recursos
+- Degradações de serviços externos
+- **Falhas aleatórias do processador e recuperação**
+- **Ativação inesperada de circuit breaker do serviço**
+- **Cenários reais de engenharia do caos**
 
-## Processor URLs
+## URLs dos Processadores
 
-The tool targets these processor endpoints:
-- **Default Processor**: `http://localhost:8001`
-- **Fallback Processor**: `http://localhost:8002`
-- **Main API**: `http://localhost:9999` (default)
+A ferramenta tem como alvo estes endpoints de processador:
+- **Processador Padrão**: `http://localhost:8001`
+- **Processador de Fallback**: `http://localhost:8002`
+- **API Principal**: `http://localhost:9999` (padrão)
 
-## Building and Running
+## Compilando e Executando
 
-### Build the project:
+### Compilar o projeto:
 ```bash
 dotnet build
 ```
 
-### Run the stress tester:
+### Executar o testador de estresse:
 ```bash
-dotnet run -- [options]
+dotnet run -- [opções]
 ```
 
-### Run from published executable:
+### Executar do executável publicado:
 ```bash
 dotnet publish -c Release
-./bin/Release/net9.0/RinhaStressTester.exe [options]
+./bin/Release/net9.0/RinhaStressTester.exe [opções]
 ```
 
-## Example Output
+## Exemplo de Saída
 
 ```
 info: RinhaStressTester.Program[0]
-      Starting stress test with 500 requests using 20 threads
+      Iniciando teste de estresse com 500 requisições usando 20 threads
 info: RinhaStressTester.Program[0]
-      Target URL: http://localhost:9999
+      URL de destino: http://localhost:9999
 info: RinhaStressTester.Program[0]
-      🔥 Both mid-test DELAY and FAILURE changes are ENABLED - Dynamic resilience testing active!
+      🔥 Ambas as mudanças de DELAY e FALHA no meio do teste estão HABILITADAS - Teste dinâmico de resiliência ativo!
 info: RinhaStressTester.Program[0]
-      Generated 500 payment requests
+      Geradas 500 requisições de pagamento
 info: RinhaStressTester.Program[0]
-      Mid-test delay change will trigger in approximately 12 seconds
+      Mudança de delay no meio do teste será acionada em aproximadamente 12 segundos
 info: RinhaStressTester.Program[0]
-      Mid-test failure change will trigger in approximately 14 seconds
+      Mudança de falha no meio do teste será acionada em aproximadamente 14 segundos
 info: RinhaStressTester.Program[0]
-      🔄 TRIGGERING MID-TEST DELAY CHANGE - Setting delay to 1250ms on default processor
+      🔄 ACIONANDO MUDANÇA DE DELAY NO MEIO DO TESTE - Definindo delay para 1250ms no processador padrão
 info: RinhaStressTester.Program[0]
-      ✅ Successfully set delay to 1250ms on Default processor
+      ✅ Delay definido com sucesso para 1250ms no processador Padrão
 info: RinhaStressTester.Program[0]
-      ⏳ Waiting 3 seconds with increased delay...
+      ⏳ Aguardando 3 segundos com delay aumentado...
 info: RinhaStressTester.Program[0]
-      � TRIGGERING MID-TEST FAILURE CHANGE - Enabling failures on default processor
+      🔥 ACIONANDO MUDANÇA DE FALHA NO MEIO DO TESTE - Habilitando falhas no processador padrão
 info: RinhaStressTester.Program[0]
-      ✅ Successfully ENABLED failures on Default processor
+      ✅ Falhas HABILITADAS com sucesso no processador Padrão
 info: RinhaStressTester.Program[0]
-      �🔄 RESETTING DELAY - Setting delay back to 0ms on default processor
+      🔄 RESETANDO DELAY - Definindo delay de volta para 0ms no processador padrão
 info: RinhaStressTester.Program[0]
-      ✅ Successfully set delay to 0ms on Default processor
+      ✅ Delay definido com sucesso para 0ms no processador Padrão
 info: RinhaStressTester.Program[0]
-      ✅ Mid-test delay change sequence completed
+      ✅ Sequência de mudança de delay no meio do teste concluída
 info: RinhaStressTester.Program[0]
-      ⏳ Waiting 3 seconds with failures enabled...
+      ⏳ Aguardando 3 segundos com falhas habilitadas...
 info: RinhaStressTester.Program[0]
-      🔄 RESETTING FAILURE - Disabling failures on default processor
+      🔄 RESETANDO FALHA - Desabilitando falhas no processador padrão
 info: RinhaStressTester.Program[0]
-      ✅ Successfully DISABLED failures on Default processor
+      ✅ Falhas DESABILITADAS com sucesso no processador Padrão
 info: RinhaStressTester.Program[0]
-      ✅ Mid-test failure change sequence completed
+      ✅ Sequência de mudança de falha no meio do teste concluída
 
-=== STRESS TEST RESULTS ===
-Total Time: 15.67 seconds
-Total Requests: 500
-Requests per Second: 31.91
-Concurrent Threads: 20
+=== RESULTADOS DO TESTE DE ESTRESSE ===
+Tempo Total: 15.67 segundos
+Total de Requisições: 500
+Requisições por Segundo: 31.91
+Threads Concorrentes: 20
 
-=== RESPONSE STATISTICS ===
-Successful Requests: 487 (97.40%)
-Failed Requests: 8 (1.60%)
-Error Requests: 5 (1.00%)
+=== ESTATÍSTICAS DE RESPOSTA ===
+Requisições Bem-sucedidas: 487 (97.40%)
+Requisições Falhadas: 8 (1.60%)
+Requisições com Erro: 5 (1.00%)
 
-=== RESPONSE TIME STATISTICS ===
-Average Response Time: 456.78 ms
-Minimum Response Time: 45.23 ms
-Maximum Response Time: 1,678.90 ms
-50th Percentile (Median): 234.56 ms
-95th Percentile: 1,345.67 ms
-99th Percentile: 1,567.89 ms
+=== ESTATÍSTICAS DE TEMPO DE RESPOSTA ===
+Tempo Médio de Resposta: 456.78 ms
+Tempo Mínimo de Resposta: 45.23 ms
+Tempo Máximo de Resposta: 1,678.90 ms
+50º Percentil (Mediana): 234.56 ms
+95º Percentil: 1,345.67 ms
+99º Percentil: 1,567.89 ms
 
-=== STATUS CODE BREAKDOWN ===
-201: 487 requests
-429: 8 requests
-500: 5 requests
+=== DETALHAMENTO POR CÓDIGO DE STATUS ===
+201: 487 requisições
+429: 8 requisições
+500: 5 requisições
 ```
 
-## Features
+## Recursos
 
-- **Configurable Request Volume**: Specify the number of requests to send
-- **Concurrent Threading**: Control the number of concurrent threads for load testing
-- **Mid-Test Delay Simulation**: Automatically tests system resilience during latency spikes
-- **Mid-Test Failure Simulation**: Automatically tests system resilience during processor failures
-- **Processor Configuration**: Manually set delays on default/fallback processors
-- **Detailed Statistics**: Get comprehensive performance metrics including:
-  - Response time percentiles (50th, 95th, 99th)
-  - Success/failure rates
-  - HTTP status code breakdown
-  - Requests per second
-- **Realistic Test Data**: Generates random payment requests with varying amounts
-- **Real-time Progress**: Shows progress updates during test execution
+- **Volume de Requisições Configurável**: Especifique o número de requisições para enviar
+- **Threading Concorrente**: Controle o número de threads concorrentes para teste de carga
+- **Simulação de Delay no Meio do Teste**: Testa automaticamente a resiliência do sistema durante picos de latência
+- **Simulação de Falha no Meio do Teste**: Testa automaticamente a resiliência do sistema durante falhas do processador
+- **Configuração do Processador**: Defina delays manualmente nos processadores padrão/fallback
+- **Estatísticas Detalhadas**: Obtenha métricas abrangentes de performance incluindo:
+  - Percentis de tempo de resposta (50º, 95º, 99º)
+  - Taxas de sucesso/falha
+  - Detalhamento de códigos de status HTTP
+  - Requisições por segundo
+- **Dados de Teste Realistas**: Gera requisições de pagamento aleatórias com valores variados
+- **Progresso em Tempo Real**: Mostra atualizações de progresso durante a execução do teste
 
-## Notes
+## Observações
 
-- The stress tester generates realistic payment data with random amounts between R$ 0.01 and R$ 1,000.00
-- Each request includes a unique correlation ID
-- Progress updates are shown every 100 requests
-- All requests are made concurrently within the specified thread limit
-- Mid-test delay change requires the default processor to be running on `http://localhost:8001`
-- Mid-test failure simulation requires the default processor to be running on `http://localhost:8001`
-- Uses separate HttpClient instances to avoid interference between stress test and configuration calls
+- O testador de estresse gera dados de pagamento realistas com valores aleatórios entre R$ 0,01 e R$ 1.000,00
+- Cada requisição inclui um ID de correlação único
+- Atualizações de progresso são mostradas a cada 100 requisições
+- Todas as requisições são feitas concorrentemente dentro do limite de threads especificado
+- Mudança de delay no meio do teste requer que o processador padrão esteja rodando em `http://localhost:8001`
+- Simulação de falha no meio do teste requer que o processador padrão esteja rodando em `http://localhost:8001`
+- Usa instâncias separadas de HttpClient para evitar interferência entre teste de estresse e chamadas de configuração
