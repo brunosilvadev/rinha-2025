@@ -22,8 +22,7 @@ A lógica principal está na classe DecisionService, que vai seguir a seguinte o
 4. Se o fallback estiver em falha ou alta latência também, recomenda o default processor (seguindo a lógica "fail fast")
 
 ## Misc
-No Program.cs eu fiz algumas configurações para otimizar performance, como declarar os serviços em Singleton e reutilizar a mesma instância de httpClient com pool de conexões.
-
+No Program.cs eu fiz algumas configurações para otimizar performance, como declarar os serviços em Singleton e reutilizar a mesma instância de httpClient com pool de conexões. Além disso na pasta RinhaStressTester tem um aplicativo de linha de comando feito para simular localmente o cenário de teste deste desafio, mas foi totalmente feito com ajuda de AI e absolutamente mandrake.
 ---
 
 ## TODO
