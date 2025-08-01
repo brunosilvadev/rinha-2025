@@ -20,11 +20,11 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
     
-    private const int MaxRetries = 2; // Reduced from 3 for faster performance
+    private const int MaxRetries = 2;
     private static readonly TimeSpan[] RetryDelays = 
     {
-        TimeSpan.FromMilliseconds(25),  // Reduced from 100ms
-        TimeSpan.FromMilliseconds(100)  // Reduced from 500ms (removed 1s delay)
+        TimeSpan.FromMilliseconds(25),
+        TimeSpan.FromMilliseconds(100)
     };
 
     public async Task<bool> ProcessPaymentAsync(PaymentRequest paymentRequest)
@@ -35,8 +35,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
             amount = paymentRequest.Amount,
             requestedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
         };
-
-        // Retry the entire payment process with exponential backoff
+        
         for (int attempt = 0; attempt < MaxRetries; attempt++)
         {
             var result = await TryProcessPaymentWithFallback(paymentData, paymentRequest.Amount, attempt);
@@ -52,7 +51,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
                 return true;
             }
 
-            // If this wasn't the last attempt, wait before retrying
+            // If this wasn't the last attempt, wait exponentially longer before retrying
             if (attempt < MaxRetries - 1)
             {
                 var delay = RetryDelays[attempt];
@@ -70,7 +69,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
     private async Task<PaymentResult> TryProcessPaymentWithFallback(object paymentData, decimal amount, int attemptNumber)
     {
         // Use DecisionService to determine the preferred processor
-        bool preferDefaultProcessor = await _decisionService.DecidePaymentProcessor();
+        bool preferDefaultProcessor = await _decisionService.UsePrimaryProcessor();
         
         string primaryProcessorUrl;
         string primaryProcessorType;
@@ -95,10 +94,11 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         // Try primary processor first
         if (await TryProcessPaymentCall(primaryProcessorUrl, paymentData))
         {
+            // Success = true to be recorded in circuit breaker
             return new PaymentResult(true, primaryProcessorType);
         }
-        
-        // Record failure for primary processor circuit breaker
+
+        // If not successful, record failure for primary processor circuit breaker
         await _decisionService.RecordFailureAsync(primaryProcessorType);
         
         _logger.LogWarning("{ProcessorType} processor failed (attempt {Attempt}), trying {FallbackType} for correlation ID: {CorrelationId}", 
@@ -115,9 +115,12 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
 
         _logger.LogWarning("Both processors failed on attempt {Attempt} for correlation ID: {CorrelationId}", 
             attemptNumber + 1, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
+
+        // If both processors failed, return failure result
         return new PaymentResult(false, "none");
     }
 
+    // Attempts to process the payment call with the given processor URL and payment data
     private async Task<bool> TryProcessPaymentCall(string processorUrl, object paymentData)
     {
         try
@@ -136,12 +139,10 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
                     paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
                 return true;
             }
-            else
-            {
-                _logger.LogWarning("Payment processor failed for correlation ID: {CorrelationId}. Status: {StatusCode}",
-                    paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData), response.StatusCode);
-                return false;
-            }
+
+            _logger.LogWarning("Payment processor failed for correlation ID: {CorrelationId}. Status: {StatusCode}",
+                paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData), response.StatusCode);
+            return false;
         }
         catch (Exception ex)
         {

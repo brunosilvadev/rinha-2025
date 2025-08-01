@@ -40,7 +40,7 @@ public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
         try
         {
             using var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(10);
+            httpClient.Timeout = TimeSpan.FromSeconds(1);
 
             var response = await httpClient.GetAsync($"{processorUrl}/payments/service-health");
 

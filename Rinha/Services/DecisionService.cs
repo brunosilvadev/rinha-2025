@@ -5,30 +5,13 @@ using StackExchange.Redis;
 
 namespace Rinha.Services;
 
-public enum CircuitBreakerState
-{
-    Closed,
-    Open,
-    HalfOpen
-}
-
-public class CircuitBreakerData
-{
-    public CircuitBreakerState State { get; set; } = CircuitBreakerState.Closed;
-    public int FailureCount { get; set; } = 0;
-    public int SuccessCount { get; set; } = 0;
-    public DateTime LastFailureTime { get; set; } = DateTime.MinValue;
-    public DateTime LastStateChange { get; set; } = DateTime.UtcNow;
-}
-
 public class DecisionService(PaymentHealthCheckService healthCheckService, ILogger<DecisionService> logger, IConnectionMultiplexer redis)
 {
     private readonly PaymentHealthCheckService _healthCheckService = healthCheckService;
     private readonly ILogger<DecisionService> _logger = logger;
     private readonly IDatabase _redis = redis.GetDatabase();
-    
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromSeconds(5);
-    private const int LatencyThreshold = 500; // 500ms threshold
+    private const int LatencyThreshold = 500;
 
     // Circuit breaker settings
     private const int FailureThreshold = 5;
@@ -43,14 +26,12 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
     // Local lock to prevent multiple threads from fetching the same health check simultaneously
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fetchLocks = new();
 
-    /// <summary>
-    /// Decides which payment processor to use based on health checks, latency, and circuit breaker state.
-    /// Returns true for default processor, false for fallback processor.
-    /// Optimized for speed with circuit breaker protection - fails fast to meet p99 < 11ms target.
-    /// </summary>
-    public async Task<bool> DecidePaymentProcessor()
+    /// Decides which payment processor to use based on health checks, latency, and circuit breaker state
+    /// Returns true for default processor, false for fallback processor
+    public async Task<bool> UsePrimaryProcessor()
     {
-        // Check circuit breaker states first
+        // Check circuit breaker states first. Open means we should not use that processor
+        // Half-open means we can test it, but only if health checks pass
         var defaultCircuitState = await GetCircuitBreakerStateAsync("default");
         var fallbackCircuitState = await GetCircuitBreakerStateAsync("fallback");
         
@@ -96,34 +77,31 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
             var fallbackHealthCheck = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
             if (fallbackHealthCheck != null && !fallbackHealthCheck.Failing)
             {
-                // Give fallback a 20% chance to test recovery when healthy, otherwise use default
-                var testFallback = Random.Shared.Next(100) < 20;
-                if (testFallback)
-                {
-                    _logger.LogDebug("DECISION_RESULT: Using fallback processor - circuit is HALF-OPEN, health passed, testing recovery");
-                    return false;
-                }
+                _logger.LogDebug("DECISION_RESULT: Using fallback processor - circuit is HALF-OPEN and health check passed, testing recovery");
+                return false;
             }
-            _logger.LogDebug("DECISION_RESULT: Using default processor - fallback is HALF-OPEN but health failed or not testing this time");
+            _logger.LogDebug("DECISION_RESULT: Using default processor - fallback is HALF-OPEN but health check failed");
             return true;
         }
         
-        // Both circuits closed/half-open - proceed with health checks
-        // Single attempt only - no retries for speed
-        // Check default processor health first (lower fees)
-        var defaultHealth = await GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
+        // Both circuits closed - proceed with health checks
+        // Fetch both health checks in parallel for speed
+        var defaultHealthTask = GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
+        var fallbackHealthTask = GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
         
-        // If default is healthy and fast, use it immediately
+        var defaultHealth = await defaultHealthTask;
+        
+        // If default is healthy and fast, use it immediately (don't wait for fallback)
         if (defaultHealth != null && !defaultHealth.Failing && defaultHealth.MinResponseTime < LatencyThreshold)
         {
             _logger.LogDebug("DECISION_RESULT: Using default processor - healthy and low latency ({Latency}ms)", defaultHealth.MinResponseTime);
             return true;
         }
         
-        // Check fallback only if default is problematic
-        var fallbackHealth = await GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
+        // Default is problematic, wait for fallback result
+        var fallbackHealth = await fallbackHealthTask;
         
-        // Use fallback if it's healthy (regardless of default state for speed)
+        // Use fallback if it's healthy
         if (fallbackHealth != null && !fallbackHealth.Failing)
         {
             _logger.LogDebug("DECISION_RESULT: Using fallback processor - default unavailable or slow");
@@ -317,4 +295,20 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         // Default state if no data found or error
         return new CircuitBreakerData();
     }
+}
+
+public enum CircuitBreakerState
+{
+    Closed,
+    Open,
+    HalfOpen
+}
+
+public class CircuitBreakerData
+{
+    public CircuitBreakerState State { get; set; } = CircuitBreakerState.Closed;
+    public int FailureCount { get; set; } = 0;
+    public int SuccessCount { get; set; } = 0;
+    public DateTime LastFailureTime { get; set; } = DateTime.MinValue;
+    public DateTime LastStateChange { get; set; } = DateTime.UtcNow;
 }
