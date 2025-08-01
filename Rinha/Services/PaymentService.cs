@@ -21,6 +21,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
     };
     
     private const int MaxRetries = 2;
+    private const int PaymentTimeoutMs = 250;
     private static readonly TimeSpan[] RetryDelays = 
     {
         TimeSpan.FromMilliseconds(25),
@@ -41,11 +42,23 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
             var result = await TryProcessPaymentWithFallback(paymentData, paymentRequest.Amount, attempt);
             if (result.Success)
             {
-                // Record success in circuit breaker
-                await _decisionService.RecordSuccessAsync(result.ProcessorUsed);
+                // Don't await these Redis operations, fire and forget
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Record success in circuit breaker
+                        await _decisionService.RecordSuccessAsync(result.ProcessorUsed);
+                        
+                        // Record in Redis only when we know which processor actually processed it
+                        await _summaryService.IncrementPaymentAsync(result.ProcessorUsed, paymentRequest.Amount);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to record payment metrics for {CorrelationId}", paymentRequest.CorrelationId);
+                    }
+                });
                 
-                // Record in Redis only when we know which processor actually processed it
-                await _summaryService.IncrementPaymentAsync(result.ProcessorUsed, paymentRequest.Amount);
                 _logger.LogInformation("Payment {CorrelationId} successfully processed by {ProcessorType} processor", 
                     paymentRequest.CorrelationId, result.ProcessorUsed);
                 return true;
@@ -87,7 +100,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         }
 
         // If not successful, record failure for primary processor circuit breaker
-        await _decisionService.RecordFailureAsync(primaryProcessorType);
+        _ = Task.Run(() => _decisionService.RecordFailureAsync(primaryProcessorType));
         
         _logger.LogWarning("{ProcessorType} processor failed (attempt {Attempt}), trying {FallbackType} for correlation ID: {CorrelationId}", 
             primaryProcessorType, attemptNumber + 1, fallbackProcessorType, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
@@ -99,7 +112,7 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         }
 
         // Record failure for fallback processor circuit breaker
-        await _decisionService.RecordFailureAsync(fallbackProcessorType);
+        _ = Task.Run(() => _decisionService.RecordFailureAsync(fallbackProcessorType));
 
         _logger.LogWarning("Both processors failed on attempt {Attempt} for correlation ID: {CorrelationId}", 
             attemptNumber + 1, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
@@ -113,13 +126,13 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
     {
         try
         {
-            using var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(1);
+            using var httpClient = _httpClientFactory.CreateClient("PaymentProcessor");
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(PaymentTimeoutMs));
 
             var json = JsonSerializer.Serialize(paymentData, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await httpClient.PostAsync($"{processorUrl}/payments", content);
+            var response = await httpClient.PostAsync($"{processorUrl}/payments", content, cts.Token);
 
             if (response.IsSuccessStatusCode)
             {
@@ -130,6 +143,12 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
 
             _logger.LogWarning("Payment processor failed for correlation ID: {CorrelationId}. Status: {StatusCode}",
                 paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData), response.StatusCode);
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Payment processor timeout (>{TimeoutMs}ms) for correlation ID: {CorrelationId}",
+                PaymentTimeoutMs, paymentData.GetType().GetProperty("correlationId")?.GetValue(paymentData));
             return false;
         }
         catch (Exception ex)

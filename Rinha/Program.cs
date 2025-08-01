@@ -15,17 +15,46 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
     var configuration = ConfigurationOptions.Parse(redisConnectionString);
     configuration.AbortOnConnectFail = false;
     configuration.ConnectRetry = 3;
-    configuration.ConnectTimeout = 5000;
+    configuration.ConnectTimeout = 2000;
+    configuration.SyncTimeout = 1000;
+    configuration.AsyncTimeout = 1000;
+    configuration.CommandMap = CommandMap.Create(
+    [
+        // Disable potentially slow commands
+        "FLUSHDB", "FLUSHALL", "KEYS", "MIGRATE", "MOVE", "OBJECT", "RENAME", "RENAMENX"
+    ], available: false);
+    
+    // Enable multiplexing for better throughput
+    configuration.DefaultDatabase = 0;
+    
     return ConnectionMultiplexer.Connect(configuration);
 });
 
-builder.Services.AddHttpClient<PaymentService>(client =>
+// Configure HTTP clients with connection pooling
+builder.Services.AddHttpClient("PaymentProcessor", client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(1);
+    client.Timeout = TimeSpan.FromMilliseconds(1000); // Increased for payment processing
+    client.DefaultRequestHeaders.Connection.Add("keep-alive");
+    client.DefaultRequestHeaders.ConnectionClose = false;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
 {
-    MaxConnectionsPerServer = 100,
-    UseProxy = false
+    MaxConnectionsPerServer = 200,
+    UseProxy = false,
+    UseCookies = false,
+    PreAuthenticate = false
+});
+
+builder.Services.AddHttpClient("HealthCheck", client =>
+{
+    client.Timeout = TimeSpan.FromMilliseconds(500);
+    client.DefaultRequestHeaders.Connection.Add("keep-alive");
+    client.DefaultRequestHeaders.ConnectionClose = false;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+{
+    MaxConnectionsPerServer = 50,
+    UseProxy = false,
+    UseCookies = false,
+    PreAuthenticate = false
 });
 builder.Services.AddSingleton<PaymentSummaryService>();
 builder.Services.AddSingleton(provider =>

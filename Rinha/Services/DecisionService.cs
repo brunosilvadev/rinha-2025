@@ -30,10 +30,12 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
     // Returns true for default processor, false for fallback processor
     public async Task<bool> UsePrimaryProcessor()
     {
-        // Check circuit breaker states first. Open means we should not use that processor
-        // Half-open means we can test it, but only if health checks pass
-        var defaultCircuitState = await GetCircuitBreakerStateAsync("default");
-        var fallbackCircuitState = await GetCircuitBreakerStateAsync("fallback");
+        // Fetch both circuit breaker states in parallel using pipeline for efficiency
+        var defaultCircuitTask = GetCircuitBreakerStateAsync("default");
+        var fallbackCircuitTask = GetCircuitBreakerStateAsync("fallback");
+        
+        var defaultCircuitState = await defaultCircuitTask;
+        var fallbackCircuitState = await fallbackCircuitTask;
         
         // If default circuit is open, use fallback (if available)
         if (defaultCircuitState.State == CircuitBreakerState.Open)
@@ -83,7 +85,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
         
         // Both circuits closed - proceed with health checks
-        // Fetch both health checks in parallel for speed
+        // Fetch both health checks in parallel
         var defaultHealthTask = GetCachedHealthCheckAsync("default", _healthCheckService.GetDefaultProcessorHealthAsync);
         var fallbackHealthTask = GetCachedHealthCheckAsync("fallback", _healthCheckService.GetFallbackProcessorHealthAsync);
         
@@ -156,18 +158,21 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
             // Fetch fresh health check
             var health = await healthCheckFunc();
             
-            // Cache the result in Redis with expiration
+            // Cache the result in Redis with expiration but don't await
             if (health != null)
             {
-                try
+                _ = Task.Run(async () =>
                 {
-                    var jsonData = JsonSerializer.Serialize(health, JsonOptions);
-                    await _redis.StringSetAsync(cacheKey, jsonData, CacheExpiry);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to cache health check in Redis for {ProcessorKey}", processorKey);
-                }
+                    try
+                    {
+                        var jsonData = JsonSerializer.Serialize(health, JsonOptions);
+                        await _redis.StringSetAsync(cacheKey, jsonData, CacheExpiry);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to cache health check in Redis for {ProcessorKey}", processorKey);
+                    }
+                });
             }
 
             return health;

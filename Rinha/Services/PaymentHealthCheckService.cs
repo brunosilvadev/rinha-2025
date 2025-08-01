@@ -33,14 +33,14 @@ public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
     {
         try
         {
-            using var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(1);
+            using var httpClient = _httpClientFactory.CreateClient("HealthCheck");
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
 
-            var response = await httpClient.GetAsync($"{processorUrl}/payments/service-health");
+            var response = await httpClient.GetAsync($"{processorUrl}/payments/service-health", cts.Token);
 
             if (response.IsSuccessStatusCode)
             {
-                var jsonContent = await response.Content.ReadAsStringAsync();
+                var jsonContent = await response.Content.ReadAsStringAsync(cts.Token);
                 var healthCheck = JsonSerializer.Deserialize<PaymentProcessorHealthCheck>(jsonContent, JsonOptions);
 
                 _logger.LogDebug("{ProcessorType} processor health check successful: Failing={Failing}, MinResponseTime={MinResponseTime}ms",
@@ -51,6 +51,11 @@ public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
 
             _logger.LogWarning("{ProcessorType} processor health check failed with status: {StatusCode}",
                 processorType, response.StatusCode);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Health check timeout for {ProcessorType} processor", processorType);
             return null;
         }
         catch (Exception ex)
