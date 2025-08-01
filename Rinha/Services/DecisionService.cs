@@ -26,8 +26,8 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
     // Local lock to prevent multiple threads from fetching the same health check simultaneously
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fetchLocks = new();
 
-    /// Decides which payment processor to use based on health checks, latency, and circuit breaker state
-    /// Returns true for default processor, false for fallback processor
+    // Decides which payment processor to use based on health checks, latency, and circuit breaker state
+    // Returns true for default processor, false for fallback processor
     public async Task<bool> UsePrimaryProcessor()
     {
         // Check circuit breaker states first. Open means we should not use that processor
@@ -178,9 +178,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
     }
 
-    /// <summary>
-    /// Records a successful payment for circuit breaker tracking
-    /// </summary>
+    // Records a successful payment for circuit breaker tracking
     public async Task RecordSuccessAsync(string processorType)
     {
         try
@@ -214,7 +212,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
     }
 
-    /// Records a failure for circuit breaker tracking
+    // Records a failure for circuit breaker tracking
     public async Task RecordFailureAsync(string processorType)
     {
         try
@@ -250,7 +248,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
     }
 
-    /// Gets the current circuit breaker state for a processor
+    // Gets the current circuit breaker state for a processor
     private async Task<CircuitBreakerData> GetCircuitBreakerStateAsync(string processorType)
     {
         var circuitKey = $"circuit_breaker:{processorType}";

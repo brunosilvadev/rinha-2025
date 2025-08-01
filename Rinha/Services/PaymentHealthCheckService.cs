@@ -17,19 +17,13 @@ public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    /// <summary>
-    /// Gets the health check status for the default payment processor.
-    /// </summary>
-    /// <returns>The health check result or null if failed</returns>
+    // Gets the health check status for the default payment processor.
     public async Task<PaymentProcessorHealthCheck?> GetDefaultProcessorHealthAsync()
     {
         return await CallHealthCheckAsync(_defaultProcessorUrl, "default");
     }
 
-    /// <summary>
-    /// Gets the health check status for the fallback payment processor.
-    /// </summary>
-    /// <returns>The health check result or null if failed</returns>
+    // Gets the health check status for the fallback payment processor.
     public async Task<PaymentProcessorHealthCheck?> GetFallbackProcessorHealthAsync()
     {
         return await CallHealthCheckAsync(_fallbackProcessorUrl, "fallback");
