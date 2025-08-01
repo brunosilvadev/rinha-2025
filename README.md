@@ -11,6 +11,7 @@ Este projeto é uma submissão para a Rinha de Backend 2025, implementada em .NE
 - [ ] Limpar comentários
 - [x] Revisar configurações de CPU e memória
 - [ ] Remover lógica desnecessária para minimizar o pacote
+- [ ] Remover arquivos desnecessários do repositório
 
 
 # Integração com Payment Processors - Rinha 2025
