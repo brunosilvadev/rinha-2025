@@ -54,12 +54,10 @@ public class PaymentHealthCheckService(IHttpClientFactory httpClientFactory,
 
                 return healthCheck;
             }
-            else
-            {
-                _logger.LogWarning("{ProcessorType} processor health check failed with status: {StatusCode}",
-                    processorType, response.StatusCode);
-                return null;
-            }
+
+            _logger.LogWarning("{ProcessorType} processor health check failed with status: {StatusCode}",
+                processorType, response.StatusCode);
+            return null;
         }
         catch (Exception ex)
         {

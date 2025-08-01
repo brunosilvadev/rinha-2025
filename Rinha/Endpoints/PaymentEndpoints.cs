@@ -9,7 +9,6 @@ public static class PaymentEndpoints
     {
         app.MapPost("/payments", async (PaymentRequest request, PaymentService paymentService) =>
         {
-            // Minimal validation for speed - trust the input more
             if (request.CorrelationId == Guid.Empty || request.Amount <= 0)
             {
                 return Results.BadRequest();
@@ -25,7 +24,6 @@ public static class PaymentEndpoints
             DateTime? fromDate = null;
             DateTime? toDate = null;
 
-            // Parse optional date parameters
             if (!string.IsNullOrEmpty(from) && DateTime.TryParse(from, out var parsedFrom))
             {
                 fromDate = parsedFrom;
@@ -36,7 +34,6 @@ public static class PaymentEndpoints
                 toDate = parsedTo;
             }
 
-            // Validate date range if both are provided
             if (fromDate.HasValue && toDate.HasValue && fromDate > toDate)
             {
                 return Results.BadRequest();
@@ -46,7 +43,7 @@ public static class PaymentEndpoints
             return Results.Ok(summary);
         });
 
-        // Optional: Reset endpoint for testing
+        // Optional reset endpoint for testing
         app.MapDelete("/payments-summary", async (PaymentSummaryService summaryService) =>
         {
             await summaryService.ResetSummaryAsync();

@@ -57,11 +57,9 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
                 _logger.LogDebug("DECISION_RESULT: Using default processor - circuit is HALF-OPEN and health check passed");
                 return true;
             }
-            else
-            {
-                _logger.LogDebug("DECISION_RESULT: Using fallback processor - default circuit is HALF-OPEN but health check failed");
-                return false;
-            }
+
+            _logger.LogDebug("DECISION_RESULT: Using fallback processor - default circuit is HALF-OPEN but health check failed");
+            return false;
         }
         
         // If fallback circuit is open, prefer default
@@ -198,7 +196,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
                 
                 if (circuitData.SuccessCount >= SuccessThreshold)
                 {
-                    // Close the circuit
+                    // Close the circuit. Processor is healthy again
                     circuitData.State = CircuitBreakerState.Closed;
                     circuitData.FailureCount = 0;
                     circuitData.SuccessCount = 0;
@@ -216,9 +214,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
     }
 
-    /// <summary>
     /// Records a failure for circuit breaker tracking
-    /// </summary>
     public async Task RecordFailureAsync(string processorType)
     {
         try
@@ -236,7 +232,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
                 
                 if (circuitData.FailureCount >= FailureThreshold)
                 {
-                    // Open the circuit
+                    // Open the circuit. Processor is unhealthy
                     circuitData.State = CircuitBreakerState.Open;
                     circuitData.SuccessCount = 0;
                     circuitData.LastStateChange = DateTime.UtcNow;
@@ -254,9 +250,7 @@ public class DecisionService(PaymentHealthCheckService healthCheckService, ILogg
         }
     }
 
-    /// <summary>
     /// Gets the current circuit breaker state for a processor
-    /// </summary>
     private async Task<CircuitBreakerData> GetCircuitBreakerStateAsync(string processorType)
     {
         var circuitKey = $"circuit_breaker:{processorType}";

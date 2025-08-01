@@ -71,30 +71,18 @@ public class PaymentService(IHttpClientFactory httpClientFactory, ILogger<Paymen
         // Use DecisionService to determine the preferred processor
         bool preferDefaultProcessor = await _decisionService.UsePrimaryProcessor();
         
-        string primaryProcessorUrl;
-        string primaryProcessorType;
-        string fallbackProcessorUrl_local;
-        string fallbackProcessorType;
-        
-        if (preferDefaultProcessor)
-        {
-            primaryProcessorUrl = _defaultProcessorUrl;
-            primaryProcessorType = "default";
-            fallbackProcessorUrl_local = _fallbackProcessorUrl;
-            fallbackProcessorType = "fallback";
-        }
-        else
-        {
-            primaryProcessorUrl = _fallbackProcessorUrl;
-            primaryProcessorType = "fallback";
-            fallbackProcessorUrl_local = _defaultProcessorUrl;
-            fallbackProcessorType = "default";
-        }
-        
+        var (   primaryProcessorUrl,
+                primaryProcessorType,
+                fallbackProcessorUrl_local,
+                fallbackProcessorType
+            ) = preferDefaultProcessor
+            ? (_defaultProcessorUrl, "default", _fallbackProcessorUrl, "fallback")
+            : (_fallbackProcessorUrl, "fallback", _defaultProcessorUrl, "default");
+
         // Try primary processor first
         if (await TryProcessPaymentCall(primaryProcessorUrl, paymentData))
         {
-            // Success = true to be recorded in circuit breaker
+            // Return success:true to be recorded in circuit breaker
             return new PaymentResult(true, primaryProcessorType);
         }
 
